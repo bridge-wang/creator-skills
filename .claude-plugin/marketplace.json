@@ -4,16 +4,16 @@
     "name": "bridge-wang"
   },
   "metadata": {
-    "description": "Bridge 的创作者工具箱 — 自媒体创作流程中沉淀下来的 Skills：字幕生成、字幕校准，持续增加中",
-    "version": "1.0.0"
+    "description": "Bridge 的创作者工具箱 — 自媒体创作流程中沉淀下来的 Skills，持续增加中",
+    "version": "1.1.0"
   },
   "plugins": [
     {
       "name": "bri-video-srt",
-      "description": "视频一键出成品字幕：删气口（色彩无损）→ ffmpeg 抽音轨 → whisper.cpp 本地转录 → 自动校准错别字/断句/时间戳 → 中文排版规范，产出可直接导入剪辑软件的 SRT。内含依赖 bri-srt-calibrator。",
+      "description": "视频一键出成品字幕：删气口（色彩无损）→ ffmpeg 抽音轨 → whisper.cpp 本地转录 → 自动校准错别字/断句/时间戳 → 中文排版规范，产出可直接导入剪辑软件的 SRT。也可单独校准现成的 SRT 文件。",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "video-subtitles",
       "keywords": [
         "video",
@@ -21,31 +21,12 @@
         "srt",
         "whisper",
         "transcription",
+        "calibration",
         "auto-editor",
         "chinese"
       ],
       "skills": [
-        "./skills/bri-video-srt",
-        "./skills/bri-srt-calibrator"
-      ]
-    },
-    {
-      "name": "bri-srt-calibrator",
-      "description": "SRT 字幕校准：修正语境明确的错别字和专名固定写法，按语义合并相邻短字幕，重划分被错误切断的字幕并按字数动态微调时间戳。可单独用于校准现成的 SRT 文件。",
-      "source": "./",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "video-subtitles",
-      "keywords": [
-        "srt",
-        "subtitle",
-        "calibration",
-        "typo",
-        "timestamps",
-        "chinese"
-      ],
-      "skills": [
-        "./skills/bri-srt-calibrator"
+        "./skills/bri-video-srt"
       ]
     }
   ]

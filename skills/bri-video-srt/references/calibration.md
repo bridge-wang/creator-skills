@@ -1,17 +1,12 @@
----
-name: bri-srt-calibrator
-description: 校准 .srt 字幕文件：修正语境明确的错别字和专名固定写法，按语义合并相邻短字幕，重划分被错误切断的字幕并按字数动态微调时间戳。Use when the user uploads or provides an SRT file and says “校准字幕”, “字幕校准”, “自动校准 SRT”, “调整字幕断句”, “修正字幕错别字”, “合并字幕”, or asks to fix subtitle segmentation/timestamps.
----
+# SRT 校准流程与规则
 
-# bri-srt-calibrator：SRT 字幕自动校准
+本文档是 bri-video-srt 第 4 步「校准」的完整执行手册。目标：在源文件旁产出修正后的 `<basename>.calibrated.srt`，保留讲话者的意思和口语节奏，只修复明显的识别错误、断句问题和时间边界。
 
-Use this skill to produce a corrected `.srt` beside the source file, preserving meaning and spoken tone while fixing obvious recognition errors, subtitle breaks, and timing boundaries.
-
-本文档中 `<SKILL_DIR>` 指本 skill 所在目录（即本 SKILL.md 所在的目录）。
+本文档中 `<SKILL_DIR>` 指 bri-video-srt skill 所在目录（即 SKILL.md 所在的目录）。
 
 ## Workflow
 
-1. Confirm the input is a `.srt` file path or attached subtitle file. Save output beside the source as `<basename>.calibrated.srt` unless the user requests another path.
+1. Confirm the input is a `.srt` file path. Save output beside the source as `<basename>.calibrated.srt` unless the user requests another path.
 2. Read `<SKILL_DIR>/references/fixed_terms.tsv` before editing. Treat it as the user-maintained canonical spelling list. Read `<SKILL_DIR>/references/protected_phrases.txt` when boundary repair depends on phrases that must not be split.
 3. Run the helper script for a first pass:
 

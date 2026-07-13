@@ -1,6 +1,6 @@
 ---
 name: bri-video-srt
-description: 一句指令完成「视频/音频 → 成品 SRT 字幕」全流程：（口播原始素材先自动删气口，色彩无损）→ ffmpeg 抽音轨 → 本地 whisper-cli（large-v3-turbo）转录出原始 SRT → 自动调用 bri-srt-calibrator 校准错别字、断句与时间戳 → 按「中文文案排版指北」规范排版（中英文之间、中文与数字之间加空格等），产出可直接导入剪辑软件的最终字幕文件。当用户提供视频或音频文件路径并说「出字幕」「提取字幕」「生成字幕」「转录成 SRT」「做一份字幕文件」「给这个视频配字幕」「删气口」「剪气口」，或输入 /bri-video-srt <文件路径> 时使用；即使用户没提 Whisper、SRT 或任何工具名，只要意图是从影音文件得到一份可直接使用的字幕文件，就用本 skill，不要只做转录而跳过校准环节。
+description: 一句指令完成「视频/音频 → 成品 SRT 字幕」全流程：（口播原始素材先自动删气口，色彩无损）→ ffmpeg 抽音轨 → 本地 whisper-cli（large-v3-turbo）转录出原始 SRT → 自动校准错别字、断句与时间戳 → 按「中文文案排版指北」规范排版（中英文之间、中文与数字之间加空格等），产出可直接导入剪辑软件的最终字幕文件。当用户提供视频或音频文件路径并说「出字幕」「提取字幕」「生成字幕」「转录成 SRT」「做一份字幕文件」「给这个视频配字幕」「删气口」「剪气口」，或输入 /bri-video-srt <文件路径> 时使用；用户提供现成的 .srt 文件并说「校准字幕」「修正字幕错别字」「调整字幕断句」时也用本 skill（直接进入校准环节）。即使用户没提 Whisper、SRT 或任何工具名，只要意图是得到一份可直接使用的字幕文件，就用本 skill，不要只做转录而跳过校准环节。
 ---
 
 # bri-video-srt：视频一键出成品字幕
@@ -73,11 +73,11 @@ whisper-cli \
 - 转录完删掉临时 WAV。
 - 如果模型文件缺失或损坏：**停下来告知用户**，给出自检脚本里的下载命令，由用户决定。不要静默换用其他模型——换模型会让转录质量和用户预期不一致。
 
-### 第 4 步：调用 bri-srt-calibrator 校准
+### 第 4 步：校准
 
-用 Skill 工具调用 `bri-srt-calibrator`（与本 skill 同仓库随附、随包一起安装），输入上一步的 `<basename>.srt`。按该 skill 自己的流程走完（脚本 auto pass → 语义复查 → lint），产出 `<basename>.calibrated.srt`。
+读取 `<SKILL_DIR>/references/calibration.md` 并严格按其执行：以上一步的 `<basename>.srt` 为输入，走完「脚本 auto pass（`scripts/srt_calibrate.py`）→ 语义复查 → 手工 operations 修补 → lint」全流程，产出 `<basename>.calibrated.srt`。
 
-不要自己手写校准逻辑替代它——错别字表（fixed_terms.tsv）、保护短语、时间戳重分配都由它统一维护。如果本机找不到 `bri-srt-calibrator`，说明安装不完整，提示用户按仓库 README 重新安装，不要跳过校准。
+不要自己手写校准逻辑替代该流程——错别字表（`references/fixed_terms.tsv`）、保护短语（`references/protected_phrases.txt`）、时间戳重分配都由它统一维护。
 
 ### 第 5 步：中文排版（指北规范）
 
@@ -112,6 +112,7 @@ python3 "<SKILL_DIR>/scripts/zh_typography.py" "<basename>.calibrated.srt"
 | 情况 | 处理 |
 |---|---|
 | 输入是纯音频（mp3/m4a/wav） | 同样流程，跳过「视频」措辞即可 |
+| 输入是现成的 .srt 文件 | 跳过第 0–3 步，直接从第 4 步校准开始（此场景只需 python3，无须 ffmpeg/whisper） |
 | 视频没有音轨 | ffmpeg 会报错，告知用户，不要继续 |
 | 同名 `.srt` 已存在 | 直接覆盖没关系——它本来就是本流程的中间产物；但 `.calibrated.srt` 若已存在且用户改过，先问一句 |
 | 用户只要原始转录、明确说不要润色 | 做完第 3 步就停 |

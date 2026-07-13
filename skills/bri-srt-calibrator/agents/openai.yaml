@@ -1,6 +1,0 @@
-interface:
-  display_name: "SRT 自动校准"
-  short_description: "校准 SRT 字幕错字、术语、短句合并与时间重划分"
-  default_prompt: "Use $bri-srt-calibrator to 校准字幕 for the uploaded .srt file."
-policy:
-  allow_implicit_invocation: true

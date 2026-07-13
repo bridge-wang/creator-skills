@@ -2,9 +2,9 @@
 
 把自媒体创作里重复、繁琐、容易出错的环节，变成一句自然语言就能完成的事。
 
-creator-tools 由自媒体创作者 Bridge 创建，收录其在真实创作流程（选题、拍摄、剪辑、字幕）中沉淀并反复打磨过的 AI Skills。当前发布 2 个 Skill，持续增加中。
+creator-tools 由自媒体创作者 Bridge 创建，收录其在真实创作流程（选题、拍摄、剪辑、字幕）中沉淀并反复打磨过的 AI Skills。每个 Skill 独立可用、互不依赖。当前发布 1 个 Skill，持续增加中。
 
-**最新版本：v1.0.0**
+**最新版本：v1.1.0**
 
 ## 你可以用它做什么
 
@@ -29,7 +29,7 @@ creator-tools 由自媒体创作者 Bridge 创建，收录其在真实创作流�
 > **给 AI Agent 的安装指引**——如果你是 Agent，正在替用户安装本仓库，按以下步骤执行：
 >
 > 1. 克隆仓库到临时目录：`git clone --depth 1 https://github.com/bridge-wang/creator-skills.git`
-> 2. 把 `skills/` 下的**每个**子目录完整复制到用户的 skill 目录（两个 skill 互相配合，必须都装）：Claude Code 为 `~/.claude/skills/`，Codex 为 `~/.codex/skills/`，通用 Agents 为 `~/.agents/skills/`。目标位置已有同名目录时，先问用户是否覆盖。
+> 2. 把 `skills/` 下的每个子目录完整复制到用户的 skill 目录：Claude Code 为 `~/.claude/skills/`，Codex 为 `~/.codex/skills/`，通用 Agents 为 `~/.agents/skills/`。目标位置已有同名目录时，先问用户是否覆盖。
 > 3. 运行依赖自检并按输出提示协助用户装齐必需依赖：`bash <skill 目录>/bri-video-srt/scripts/check_setup.sh`
 > 4. 告诉用户：新开一次对话后，直接说「给这个视频出字幕 + 文件路径」即可使用。
 
@@ -68,8 +68,7 @@ bash skills/bri-video-srt/scripts/check_setup.sh
 
 | Skill | 做什么 | 直接调用 |
 |---|---|---|
-| `bri-video-srt` | 视频/音频一键出成品字幕全流程：删气口 → 转录 → 校准 → 中文排版 | `/bri-video-srt <文件路径>`，或直接说「给这个视频出字幕」 |
-| `bri-srt-calibrator` | 单独校准现成的 SRT：错别字、专名、语义断句、时间戳 | 提供 SRT 文件并说「校准字幕」 |
+| `bri-video-srt` | 视频/音频一键出成品字幕全流程：删气口 → 转录 → 校准 → 中文排版。给它现成的 SRT 则直接校准（错别字、专名、语义断句、时间戳） | `/bri-video-srt <文件路径>`，或直接说「给这个视频出字幕」「校准这份字幕」 |
 
 使用示例（安装后直接用自然语言）：
 
@@ -81,7 +80,7 @@ bash skills/bri-video-srt/scripts/check_setup.sh
 
 ## 自定义
 
-- **专名词表**：转录里反复出现你所在领域的专名误识别（人名、产品名）时，把它加进 `skills/bri-srt-calibrator/references/fixed_terms.tsv`（格式见文件头注释），下次校准自动生效。
+- **专名词表**：转录里反复出现你所在领域的专名误识别（人名、产品名）时，把它加进 `skills/bri-video-srt/references/fixed_terms.tsv`（格式见文件头注释），下次校准自动生效。
 - **保护短语**：不想被断句切开的短语，加到同目录 `protected_phrases.txt`，一行一条。
 - **删气口松紧**：嫌剪太狠调大 margin，嫌剪不干净调高 threshold（对 Agent 说即可，如「气口留白放宽一点」）。
 
