@@ -1,0 +1,13 @@
+{
+  "name": "creator-tools",
+  "owner": {
+    "name": "Bridge Wang"
+  },
+  "plugins": [
+    {
+      "name": "video-srt",
+      "source": "./plugins/video-srt",
+      "description": "视频/音频一键出成品 SRT 字幕：删气口（色彩无损）→ Whisper 本地转录 → 自动校准错别字/断句/时间戳 → 中文排版规范。含 bri-video-srt 与 srt-auto-calibrator 两个 skill。"
+    }
+  ]
+}

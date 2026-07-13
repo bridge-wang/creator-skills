@@ -1,0 +1,5 @@
+{
+  "name": "video-srt",
+  "description": "视频/音频 → 成品 SRT 字幕全流程：ffmpeg 抽音轨 → whisper.cpp 本地转录 → 自动校准（错别字、断句、时间戳）→ 中文文案排版。口播原始素材可先自动删气口（色彩无损）。",
+  "version": "1.0.0"
+}

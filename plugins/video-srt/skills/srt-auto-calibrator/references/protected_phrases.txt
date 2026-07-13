@@ -1,0 +1,25 @@
+# Phrases here should not be split across subtitle boundaries.
+# Add one phrase per line.
+ChatGPT
+Codex
+Claude
+Claude Code
+harness engineering
+OpenAI
+Anthropic
+DeepSeek
+Perplexity
+Midjourney
+Stable Diffusion
+MacBook
+Mac mini
+skill
+孙宇晨
+物理AI
+具身智能
+生成式AI
+大语言模型
+包括我在内
+一年时间内
+日更100条
+Stack Overflow

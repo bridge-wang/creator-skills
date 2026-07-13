@@ -1,0 +1,29 @@
+# canonical	aliases	mode	context_regex	note
+# mode: always = always replace aliases; contextual = replace only when context_regex matches nearby cues.
+# Alias entries are separated with |. Prefix an alias with re: to use a regular expression.
+ChatGPT	CHAT g b t|chat g b t|Chat GPT|chat gpt|chatgpt|re:\bchat\s*g\s*b\s*t\b	always		固定写法
+Codex	codex|CODEX	always		产品固定写法
+Claude	cloud|Cloud|克劳德|Claude AI	contextual	大模型|模型|AI|LLM|Anthropic|聊天|助手|智能体|代码|编程|上下文|token|推理|API	仅在大模型/Anthropic 语境中把 cloud 改为 Claude
+Claude Code	Claude code|claude code	always		产品固定写法
+harness engineering	hest engineering|hes engineering|hones engineering|harmony engineering|harnes engineering|honeys engineering|harnessengineering|hestengineering|hesengineering|honesengineering|harmonyengineering|harnesengineering|honeysengineering	contextual	配套设施|工程|项目|模型|AI|agent|智能体|prompt|聊天框|工具脚本|文件|engineering	harness engineering 术语固定写法
+harness	hest|hes|hones|harmony|harnes|honeys	contextual	harness engineering|engineering|配套设施|工程|项目|模型|AI|agent|智能体|prompt|聊天框|工具脚本|文件	harness engineering 相关常见误识别
+孙宇晨	孙雨辰|孙雨晨|孙宇辰	always		人名固定写法
+OpenAI	open ai|Open AI	always		机构固定写法
+Anthropic	anthropic|安斯罗匹克|安索ropic	contextual	大模型|模型|AI|Claude|公司|实验室|API	机构固定写法
+DeepSeek	deep seek|Deep Seek|深度求索	always		模型/公司固定写法
+Perplexity	perplexity|Perplexity AI	always		产品固定写法
+Midjourney	mid journey|Mid Journey	always		产品固定写法
+Stable Diffusion	stable diffusion|Stable diffusion	always		产品固定写法
+Sora	sora|SORA	contextual	视频|生成|模型|OpenAI|AI	产品固定写法
+MacBook	Macbook|macbook	always		产品固定写法
+Mac mini	Mac Mini|mac mini	always		产品固定写法
+skill	skil|scale	always		Codex skill 固定写法
+API	api|Api	always		技术缩写
+GPU	gpu|Gpu	always		技术缩写
+AGI	agi|Agi	always		技术缩写
+AI	ai|Ai	always		技术缩写，恒大写
+CEO	ceo|Ceo	always		职务缩写，恒大写
+CTO	cto|Cto	always		职务缩写，恒大写
+CFO	cfo|Cfo	always		职务缩写，恒大写
+COO	coo|Coo	always		职务缩写，恒大写
+Stack Overflow	stack overflow|Stack overflow|stackoverflow|Stackoverflow	always		产品/站点固定写法
