@@ -1,6 +1,6 @@
 ---
 name: bri-video-srt
-description: 一句指令完成「视频/音频 → 成品 SRT 字幕」全流程：（口播原始素材先自动删气口，色彩无损）→ ffmpeg 抽音轨 → 本地 whisper-cli（large-v3-turbo）转录出原始 SRT → 自动调用 srt-auto-calibrator 校准错别字、断句与时间戳 → 按「中文文案排版指北」规范排版（中英文之间、中文与数字之间加空格等），产出可直接导入剪辑软件的最终字幕文件。当用户提供视频或音频文件路径并说「出字幕」「提取字幕」「生成字幕」「转录成 SRT」「做一份字幕文件」「给这个视频配字幕」「删气口」「剪气口」时使用；即使用户没提 Whisper、SRT 或任何工具名，只要意图是从影音文件得到一份可直接使用的字幕文件，就用本 skill，不要只做转录而跳过校准环节。
+description: 一句指令完成「视频/音频 → 成品 SRT 字幕」全流程：（口播原始素材先自动删气口，色彩无损）→ ffmpeg 抽音轨 → 本地 whisper-cli（large-v3-turbo）转录出原始 SRT → 自动调用 bri-srt-calibrator 校准错别字、断句与时间戳 → 按「中文文案排版指北」规范排版（中英文之间、中文与数字之间加空格等），产出可直接导入剪辑软件的最终字幕文件。当用户提供视频或音频文件路径并说「出字幕」「提取字幕」「生成字幕」「转录成 SRT」「做一份字幕文件」「给这个视频配字幕」「删气口」「剪气口」，或输入 /bri-video-srt <文件路径> 时使用；即使用户没提 Whisper、SRT 或任何工具名，只要意图是从影音文件得到一份可直接使用的字幕文件，就用本 skill，不要只做转录而跳过校准环节。
 ---
 
 # bri-video-srt：视频一键出成品字幕
@@ -9,6 +9,8 @@ description: 一句指令完成「视频/音频 → 成品 SRT 字幕」全流�
 
 **转录完全在本地进行（whisper.cpp），不上传音视频到任何云端。**
 
+本文档中 `<SKILL_DIR>` 指本 skill 所在目录（即本 SKILL.md 所在的目录）。
+
 ## 流程
 
 ### 第 0 步：确认环境和输入
@@ -16,7 +18,7 @@ description: 一句指令完成「视频/音频 → 成品 SRT 字幕」全流�
 - 首次使用（或怀疑环境有变）先跑依赖自检，缺什么按提示装什么：
 
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/check_setup.sh"
+bash "<SKILL_DIR>/scripts/check_setup.sh"
 ```
 
   必需：`ffmpeg`、`whisper-cli`（whisper.cpp）、`python3`、Whisper 模型 `ggml-large-v3-turbo.bin`（约 1.6 GB，自检脚本会给出下载命令；模型路径优先取 `$WHISPER_MODEL` 环境变量，默认 `~/Models/whisper/ggml-large-v3-turbo.bin`）。可选：`auto-editor`（只有删气口功能需要）。如果有必需项缺失，把自检输出里的安装命令告诉用户并协助安装，装齐前不要继续。
@@ -36,7 +38,7 @@ auto-editor "<视频路径>" --edit "audio:threshold=4%" --margin 0.2sec \
 
 # 2. 按剪切点用 ffmpeg 重编码剪切，位深/色域/传递函数全部保持与源一致
 #    （macOS 上自动用 hevc_videotoolbox 硬件编码；其他平台回退 libx265，较慢）
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/bri-video-srt/scripts/autocut.py" \
+python3 "<SKILL_DIR>/scripts/autocut.py" \
   "<视频路径>" "<临时目录>/<basename>.cutlist.json" "<视频所在目录>/<basename>.cut.mp4"
 ```
 
@@ -71,18 +73,18 @@ whisper-cli \
 - 转录完删掉临时 WAV。
 - 如果模型文件缺失或损坏：**停下来告知用户**，给出自检脚本里的下载命令，由用户决定。不要静默换用其他模型——换模型会让转录质量和用户预期不一致。
 
-### 第 4 步：调用 srt-auto-calibrator 校准
+### 第 4 步：调用 bri-srt-calibrator 校准
 
-用 Skill 工具调用本插件自带的 `srt-auto-calibrator`（安装后完整名称为 `video-srt:srt-auto-calibrator`），输入上一步的 `<basename>.srt`。按该 skill 自己的流程走完（脚本 auto pass → 语义复查 → lint），产出 `<basename>.calibrated.srt`。
+用 Skill 工具调用 `bri-srt-calibrator`（与本 skill 同仓库随附、随包一起安装），输入上一步的 `<basename>.srt`。按该 skill 自己的流程走完（脚本 auto pass → 语义复查 → lint），产出 `<basename>.calibrated.srt`。
 
-不要自己手写校准逻辑替代它——错别字表（fixed_terms.tsv）、保护短语、时间戳重分配都由它统一维护。
+不要自己手写校准逻辑替代它——错别字表（fixed_terms.tsv）、保护短语、时间戳重分配都由它统一维护。如果本机找不到 `bri-srt-calibrator`，说明安装不完整，提示用户按仓库 README 重新安装，不要跳过校准。
 
 ### 第 5 步：中文排版（指北规范）
 
 对校准后的文件跑捆绑的排版脚本，应用「中文文案排版指北」的机械规则：
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/bri-video-srt/scripts/zh_typography.py" "<basename>.calibrated.srt"
+python3 "<SKILL_DIR>/scripts/zh_typography.py" "<basename>.calibrated.srt"
 ```
 
 脚本处理的规则（确定性，不要用模型手改代替）：

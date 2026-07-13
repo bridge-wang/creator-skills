@@ -1,13 +1,13 @@
 ---
-name: srt-auto-calibrator
+name: bri-srt-calibrator
 description: 校准 .srt 字幕文件：修正语境明确的错别字和专名固定写法，按语义合并相邻短字幕，重划分被错误切断的字幕并按字数动态微调时间戳。Use when the user uploads or provides an SRT file and says “校准字幕”, “字幕校准”, “自动校准 SRT”, “调整字幕断句”, “修正字幕错别字”, “合并字幕”, or asks to fix subtitle segmentation/timestamps.
 ---
 
-# SRT Auto Calibrator
+# bri-srt-calibrator：SRT 字幕自动校准
 
 Use this skill to produce a corrected `.srt` beside the source file, preserving meaning and spoken tone while fixing obvious recognition errors, subtitle breaks, and timing boundaries.
 
-本文档中 `<SKILL_DIR>` 指本 skill 所在目录：作为插件安装时为 `${CLAUDE_PLUGIN_ROOT}/skills/srt-auto-calibrator`。
+本文档中 `<SKILL_DIR>` 指本 skill 所在目录（即本 SKILL.md 所在的目录）。
 
 ## Workflow
 
