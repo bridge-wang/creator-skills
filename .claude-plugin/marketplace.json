@@ -5,15 +5,15 @@
   },
   "metadata": {
     "description": "Bridge 的创作者工具箱 — 自媒体创作流程中沉淀下来的 Skills，持续增加中",
-    "version": "1.1.0"
+    "version": "1.3.0"
   },
   "plugins": [
     {
       "name": "bri-video-srt",
-      "description": "视频一键出成品字幕：删气口（色彩无损）→ ffmpeg 抽音轨 → whisper.cpp 本地转录 → 自动校准错别字/断句/时间戳 → 中文排版规范，产出可直接导入剪辑软件的 SRT。也可单独校准现成的 SRT 文件。",
+      "description": "中文口播两阶段工作流：粗剪前用音频预检门禁验证重复口播切点，只允许一次 4K 导出；人工精剪锁定时间轴后，用本地 whisper.cpp 重转写、校准和音频重锚定，产出可直接导入剪辑软件的 SRT。",
       "source": "./",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.3.0",
       "category": "video-subtitles",
       "keywords": [
         "video",

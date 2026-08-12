@@ -1,0 +1,16 @@
+{
+  "candidates": [
+    {
+      "id": "descriptive_unique_id",
+      "discard_start": 62.16,
+      "retain_hint": 76.42,
+      "left_anchors": ["剪切前必须完整保留的语义短语"],
+      "right_anchors": ["重说版本开头必须出现的语义短语"],
+      "left_context": 10.0,
+      "right_context": 5.0,
+      "snap_radius": 6.5,
+      "min_supporting_silence": 1.0,
+      "max_intervening_chars": 60
+    }
+  ]
+}

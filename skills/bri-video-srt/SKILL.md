@@ -59,9 +59,9 @@ whisper-cli \
 - `-mc 0` 必须带，防止长静音触发复读循环。
 - 此 SRT 只用于检测重复口播与人工核对，**不写入视频目录，也不做最终字幕润色**。
 
-### A2. 检测并剪切长气口
+### A2. 检测长气口；此时不要导出 4K
 
-切点检测和实际剪切分开，避免 auto-editor 破坏色彩：
+切点检测和实际剪切分开，避免 auto-editor 破坏色彩，也避免在重复口播切点尚未验证时提前付出整片 4K 编码成本：
 
 `<审核目录>` 固定为 `<视频目录>/review/<basename>`，只容纳本次粗剪供人工审核的三份交付物。
 
@@ -72,23 +72,59 @@ mkdir -p "<视频目录>/review/<basename>"
 # auto-editor 只输出原始声音区间；不要给它加 margin
 auto-editor "<原始视频>" --edit "audio:threshold=4%" --margin 0sec \
   --export v1 -o "<临时目录>/<basename>.auto-editor.json"
-
-# ffmpeg 实际导出粗剪视频；留白按对标节奏统一补回
-python3 "<SKILL_DIR>/scripts/autocut.py" \
-  "<原始视频>" "<临时目录>/<basename>.auto-editor.json" \
-  "<审核目录>/<basename>.rough-cut.mp4" \
-  --max-pause 1.05 --head-pad 0.17 --tail-pad 0.37 \
-  --report "<审核目录>/<basename>.rough-cut.cutlist.json"
 ```
 
 - 正文相邻句的长静音最多保留 `1.05` 秒；片头留 `0.17` 秒，片尾留 `0.37` 秒。用户觉得节奏太紧或太松时，只调整这三个留白参数，不调整 auto-editor 的 `margin`。
-- 用 `ffprobe` 对比源与粗剪视频的 `pix_fmt`、`color_space`、`color_primaries`、`color_transfer`；任一项不一致即停止交付。
+- A2 只生成原始声音 cutlist。实际 4K 导出移到 A3 的预检门禁之后，并且整次粗剪只能执行一次。
 
-### A3. 高置信度重复口播
+### A3. 高置信度重复口播与导出前门禁
 
 - 对照 A1 的原始 SRT、音频和长停顿，寻找“前一次没说好 → 停顿 → 完整重说”的紧邻重复。文本相似且音频语义明确重复才可剪；疑似重复、课程录屏或已剪成片一律保留。
-- 不能只删 SRT 文字：每一段实际从视频删除的范围都要记录为源视频时间戳，并同步写入粗剪的剪辑清单。后续字幕映射或复现剪辑依赖这份记录。
-- 将确认重复范围和静音范围一起应用到粗剪视频；若证据不足，交付候选列表而不误剪。
+- 不能直接把 Whisper 句段起止当作剪切边界。Whisper 时间戳只提供 `discard_start` / `retain_hint` 的语义提示；保留句开头必须由附近真实长静音末端支持。
+- 为每个确认候选创建临时 JSON。字段格式见 `references/roughcut-candidates.example.json`：
+  - `discard_start`：前一次废弃口播开始时间；
+  - `retain_hint`：Whisper 推测的完整重说开始时间；
+  - `left_anchors`：剪切前一条必须完整保留的语义短语，可提供多个识别变体；
+  - `right_anchors`：完整重说开头必须出现的语义短语，可提供多个识别变体。
+- 左右锚点应选对 ASR 小幅错字稳健的核心短语，不要依赖容易误识别的单个专名。默认预览每个切点左侧 10 秒、右侧 5 秒。
+
+先生成合并 cutlist 和一次性音频预览：
+
+```bash
+python3 "<SKILL_DIR>/scripts/roughcut_preflight.py" prepare \
+  --media "<原始视频>" \
+  --wav "<临时目录>/<basename>.wav" \
+  --candidates "<临时目录>/<basename>.repeat-candidates.json" \
+  --auto-json "<临时目录>/<basename>.auto-editor.json" \
+  --combined-json "<临时目录>/<basename>.combined.json" \
+  --preview-wav "<临时目录>/<basename>.cut-preview.wav" \
+  --report "<临时目录>/<basename>.preflight.json"
+whisper-cli \
+  -m "${WHISPER_MODEL:-$HOME/Models/whisper/ggml-large-v3-turbo.bin}" \
+  -l auto -mc 0 --output-srt \
+  --output-file "<临时目录>/<basename>.cut-preview.raw" \
+  "<临时目录>/<basename>.cut-preview.wav"
+python3 "<SKILL_DIR>/scripts/roughcut_preflight.py" validate \
+  --preview-srt "<临时目录>/<basename>.cut-preview.raw.srt" \
+  --report "<临时目录>/<basename>.preflight.json"
+```
+
+- `validate` 必须 N/N 通过。任何 `left_ok` / `right_ok` 失败都禁止 4K 导出；先增加上下文、修正 ASR 锚点变体或重新判断候选，再重跑几秒钟的音频门禁。
+- 如果没有任何高置信度重复候选，跳过预览门禁，直接把 auto-editor JSON 作为 `combined.json`；不要为了满足流程虚构候选。这种情况运行 `autocut.py` 时不传 `--preflight-report`。
+- 门禁通过后才执行本次粗剪唯一一次 4K 导出：
+
+```bash
+python3 "<SKILL_DIR>/scripts/autocut.py" \
+  "<原始视频>" "<临时目录>/<basename>.combined.json" \
+  "<审核目录>/<basename>.rough-cut.mp4" \
+  --max-pause 1.05 --head-pad 0.17 --tail-pad 0.37 \
+  --report "<审核目录>/<basename>.rough-cut.cutlist.json" \
+  --preflight-report "<临时目录>/<basename>.preflight.json"
+```
+
+- 不能只删 SRT 文字：每一段实际删除范围都要写入源视频时间戳和剪辑清单。把已验证的重复范围写入 `manual_repeat_ranges_seconds`。
+- 用 `ffprobe` 对比源与粗剪视频的 `pix_fmt`、`color_space`、`color_primaries`、`color_transfer`；任一项不一致即停止交付。
+- 记录抽轨、分析/转写、预检、4K 导出和成片复检的墙钟时间。向用户报告真实百分比时应使用可观测的 ffmpeg 进度；拿不到精确进度就明确说是估算。
 
 ### A4. 生成与粗剪视频同步的审核 SRT
 
@@ -100,6 +136,11 @@ ffmpeg -nostdin -loglevel error -y -i "<审核目录>/<basename>.rough-cut.mp4" 
 whisper-cli -m "${WHISPER_MODEL:-$HOME/Models/whisper/ggml-large-v3-turbo.bin}" \
   -l auto -mc 0 --output-srt --output-file "<临时目录>/<basename>.rough-cut.raw" \
   "<临时目录>/<basename>.rough-cut.wav"
+
+# 成片转写后，先复核所有重复切点的左右锚点；失败不应自动再渲染
+python3 "<SKILL_DIR>/scripts/roughcut_preflight.py" validate-final \
+  --srt "<临时目录>/<basename>.rough-cut.raw.srt" \
+  --candidates "<临时目录>/<basename>.repeat-candidates.json"
 
 # 轻量术语修正，再输出与粗剪视频同步的审核字幕
 python3 "<SKILL_DIR>/scripts/srt_calibrate.py" auto \
@@ -117,6 +158,7 @@ python3 "<SKILL_DIR>/scripts/srt_calibrate.py" lint "<审核目录>/<basename>.r
 
 - 审核 SRT 的作用是让用户在剪映中更低成本地检查口播、重复与节奏；不做人工语义精修，避免把最终字幕工作重复一遍。
 - 只有在粗剪视频完成后重新转写，审核 SRT 才能与它严格同轴。
+- `validate-final` 必须 N/N 通过。若预检通过而成片失败，停止交付并报告该实验性门禁的失效原因；不要静默启动第二次整片 4K 渲染。
 
 ### A5. 阶段 A 交付并停止
 

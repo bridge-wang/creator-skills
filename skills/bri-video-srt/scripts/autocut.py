@@ -13,6 +13,7 @@
 import argparse
 import json
 import subprocess
+import sys
 
 
 def parse_args():
@@ -23,6 +24,10 @@ def parse_args():
     parser.add_argument(
         "--report",
         help="可选：写入实际保留/删除时间段的 JSON，供字幕映射和人工复核使用",
+    )
+    parser.add_argument(
+        "--preflight-report",
+        help="可选：roughcut_preflight.py 产生且已 N/N 通过的报告；把重复区间写入最终 cutlist",
     )
     parser.add_argument(
         "--max-pause", type=float, default=1.05,
@@ -66,6 +71,13 @@ def add_benchmark_padding(raw_keep, duration, max_pause, head_pad, tail_pad):
 args = parse_args()
 src, cutlist_path, dst = args.src, args.cutlist, args.dst
 
+preflight = None
+if args.preflight_report:
+    with open(args.preflight_report, encoding="utf-8") as preflight_file:
+        preflight = json.load(preflight_file)
+    if preflight.get("preflight_pass") is not True:
+        raise SystemExit("预检报告未 N/N 通过，禁止启动 4K 导出")
+
 probe_data = json.loads(subprocess.check_output([
     "ffprobe", "-v", "error", "-select_streams", "v:0",
     "-show_entries", "stream=r_frame_rate,pix_fmt,color_space,color_primaries,color_transfer",
@@ -94,7 +106,7 @@ else:
     codec = ["-c:v", "libx265", "-crf", "20", "-preset", "medium"]
 
 cmd = [
-    "ffmpeg", "-y", "-v", "error", "-i", src,
+    "ffmpeg", "-y", "-v", "error", "-nostats", "-progress", "pipe:1", "-i", src,
     "-vf", f"select='{vf}',setpts=N/FRAME_RATE/TB",
     "-af", f"aselect='{vf}',asetpts=N/SR/TB",
     *codec, "-tag:v", "hvc1",
@@ -105,7 +117,23 @@ cmd = [
     "-c:a", "aac", "-b:a", "192k",
     dst,
 ]
-subprocess.run(cmd, check=True)
+with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as process:
+    last_percent = -1
+    for line in process.stdout:
+        key, _, value = line.strip().partition("=")
+        if key == "out_time_ms":
+            percent = min(100, int(float(value) / 1_000_000 / duration * 100))
+            if percent >= last_percent + 2:
+                print(f"4K 导出进度：{percent}%", file=sys.stderr, flush=True)
+                last_percent = percent
+    stderr = process.stderr.read()
+    return_code = process.wait()
+if return_code:
+    if stderr:
+        print(stderr, file=sys.stderr)
+    raise SystemExit(return_code)
+if last_percent < 100:
+    print("4K 导出进度：100%", file=sys.stderr, flush=True)
 kept_duration = sum(end - start for start, end in keep)
 removed = max(0.0, duration - kept_duration)
 if args.report:
@@ -127,6 +155,19 @@ if args.report:
             "duration": round(duration - cursor, 6),
             "reason": "auto-editor silence detection",
         })
+    manual_repeats = []
+    if preflight:
+        manual_repeats = [
+            {
+                "id": item["id"],
+                "start": round(float(item["discard_start"]), 6),
+                "end": round(float(item["discard_end"]), 6),
+                "duration": round(float(item["discard_end"]) - float(item["discard_start"]), 6),
+                "reason": "high-confidence repeated/abandoned take; preflight passed",
+                "supporting_silence": item.get("supporting_silence"),
+            }
+            for item in preflight.get("resolved_ranges", [])
+        ]
     report = {
         "source": src,
         "output": dst,
@@ -141,7 +182,8 @@ if args.report:
             for start, end in keep
         ],
         "removed_ranges_seconds": removed_ranges,
-        "manual_repeat_ranges_seconds": [],
+        "manual_repeat_ranges_seconds": manual_repeats,
+        "preflight_pass": preflight.get("preflight_pass") if preflight else None,
     }
     with open(args.report, "w", encoding="utf-8") as report_file:
         json.dump(report, report_file, ensure_ascii=False, indent=2)
