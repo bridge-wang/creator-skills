@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.0 — 2026-08-14
+
+- 长停顿画面审计从“开始/中间/结束”三帧升级为“停顿前/开始/中间/结束/停顿后”五帧，每行一个候选，可直接对比停顿前后的页面状态。
+- 操作保护改为正向证据门禁：必须记录具体 `visual_evidence` 和 `protected_ranges_seconds`；静止页面、阅读/思考推测、光标轻微移动、选区取消或只有口播操作词不再足以保护停顿。
+- `uncertain` 和无低声口播证据的 `retake_context` 不再自动完整保留，默认交给 `1.05` 秒普通气口规则。
+- 操作只占长停顿的一部分时，仅恢复明确标记的最小操作窗口，其余静止区间继续压缩；报告新增 `partial_protection`。
+- 用第三课第一部分实盘复核，将“这个要先搞清楚”与“明确了我们想要什么结果之后”之间的静止空白从宽松保护改判为普通口播停顿。
+- 新增五帧取样、默认压缩不确定区间、正向证据必填和最小操作窗口恢复的回归测试。
+
 ## 1.6.0 — 2026-08-14
 
 - 为实操型受保护空白增加 `7.0` 秒软上限：不超过 7 秒完整保留，超过时保留首尾各 3.5 秒并裁掉中间，同时保住“发起操作”和“结果出现”。
@@ -58,14 +67,15 @@
 - v1.4.1 标签：`bri-video-srt-v1.4.1`
 - v1.5.0 标签：`bri-video-srt-v1.5.0`
 - v1.6.0 标签：`bri-video-srt-v1.6.0`
+- v1.7.0 标签：`bri-video-srt-v1.7.0`
 
 需要回退时优先使用 `git revert` 撤销对应版本提交，避免改写仓库历史。不要用 `git reset --hard`。
 
 ```bash
 # 先查看两个版本间只属于该 skill 的变化
-git diff bri-video-srt-v1.5.0..bri-video-srt-v1.6.0 -- \
+git diff bri-video-srt-v1.6.0..bri-video-srt-v1.7.0 -- \
   skills/bri-video-srt .claude-plugin/marketplace.json
 
-# 在保留历史的前提下撤销 v1.6.0
-git revert bri-video-srt-v1.6.0
+# 在保留历史的前提下撤销 v1.7.0
+git revert bri-video-srt-v1.7.0
 ```
