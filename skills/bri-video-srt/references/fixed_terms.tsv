@@ -23,11 +23,15 @@ Mac mini	Mac Mini|mac mini	always		产品固定写法
 Chatbot	Chatboard|ChatBot|Chatboat|chatbot|拆得购的	always		聊天机器人产品形态固定写法
 GPT	GBT	always		模型缩写固定写法
 Opus	OPAS	always		Anthropic 模型系列固定写法
-豆包	多包|多巴	always		AI 产品固定写法及常见误识别
+豆包	多包|多巴|都包	always		AI 产品固定写法及常见误识别
+豆包	东方	contextual	网页版|模型|回答|大模型|AI|助手|APP|应用|上传|发给|问一问|插件	"东方"是同音误听，仅在明显指向豆包产品的语境下替换，避免误改真实的"东方"一词（如东方财富、东方卫视）
 豆包网页版	豆包网易版	always		AI 产品页面固定写法
 扣子空间	扣字空间|扣子空間	always		AI 应用平台固定写法
-大模型	大墓形|大模形|大墨型	always		大语言模型相关常见误识别
+大模型	大墓形|大模形|大墨型|大母型	always		大语言模型相关常见误识别
+预训练	运训练	contextual	大模型|模型|训练|AI|大母型	"运训练"是"预训练"的同音误听
 沙箱环境	沙香环境|杀箱环境	always		Agent 运行环境固定写法
+口播稿	口博稿|口报稿|口播搞	always		课程口播术语常见误识别
+粘贴	粘键	contextual	链接|过来|文件|文字稿|上传	"粘键"是"粘贴"的同音误听
 飞书文档	非书文档	always		协作产品固定写法
 码农	马农	always		编程语境常用词
 判断力	判断理	always		常用能力表述

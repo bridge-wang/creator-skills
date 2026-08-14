@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.8.0 — 2026-08-14
+
+- 修复真实事故：第三课最终字幕曾把未经术语校准的 whisper 原始转写直接当成交付版本（"Cloud"/"多包"等错误逐句照搬），而 `lint` 此前完全不检查 `fixed_terms.tsv` 的替换规则，跳过校准这一步不会被任何自动检查拦下。
+- `lint_cues()` 新增残留别名检查（`find_unresolved_aliases`）：扫描输出文本中是否还残留 `fixed_terms.tsv` 里应被替换的别名（`always` 规则直接查，`contextual` 规则在上下文命中时才查），命中就报警告并提示"术语校准可能被跳过"。修复了大小写不敏感匹配把已经正确的规范写法（如 `AI`）误判为残留别名的问题。
+- `lint_cues()` 新增悬挂连接符检查：字幕行尾如果是 `、`、`，`、`；` 等，会直接报警告，避免拆句后留下孤立的顿号。
+- `apply_operations` 的 `split`/`repartition_pair`/`repartition_span` 现在会自动去除人工提供文本首尾的软分隔符（`、，,；;：:`），不再依赖人工检查。
+- `calibration.md` 新增"Cue-boundary punctuation"规则：拆句时不要在行尾留下孤立顿号，要么去掉，要么把顿号后的词一并挪进这一句。
+- `fixed_terms.tsv` 新增/修正别名：豆包（`都包`，且把"东方"独立为限定语境的 contextual 规则，避免误改真实的"东方"一词）、大模型（`大母型`）、新增预训练（`运训练`）、口播稿（`口博稿`/`口报稿`/`口播搞`）、粘贴（`粘键`，限定语境）。
+- `protected_phrases.txt` 新增 `garbage in,garbage out`，避免这个英文习语被自动拆句拆断。
+
+## 1.7.0 — 2026-08-14
+
+- 长停顿画面审计从“开始/中间/结束”三帧升级为“停顿前/开始/中间/结束/停顿后”五帧，每行一个候选，可直接对比停顿前后的页面状态。
+- 操作保护改为正向证据门禁：必须记录具体 `visual_evidence` 和 `protected_ranges_seconds`；静止页面、阅读/思考推测、光标轻微移动、选区取消或只有口播操作词不再足以保护停顿。
+- `uncertain` 和无低声口播证据的 `retake_context` 不再自动完整保留，默认交给 `1.05` 秒普通气口规则。
+- 操作只占长停顿的一部分时，仅恢复明确标记的最小操作窗口，其余静止区间继续压缩；报告新增 `partial_protection`。
+- 用第三课第一部分实盘复核，将“这个要先搞清楚”与“明确了我们想要什么结果之后”之间的静止空白从宽松保护改判为普通口播停顿。
+- 新增五帧取样、默认压缩不确定区间、正向证据必填和最小操作窗口恢复的回归测试。
+
 ## 1.6.0 — 2026-08-14
 
 - 为实操型受保护空白增加 `7.0` 秒软上限：不超过 7 秒完整保留，超过时保留首尾各 3.5 秒并裁掉中间，同时保住“发起操作”和“结果出现”。
@@ -58,14 +77,15 @@
 - v1.4.1 标签：`bri-video-srt-v1.4.1`
 - v1.5.0 标签：`bri-video-srt-v1.5.0`
 - v1.6.0 标签：`bri-video-srt-v1.6.0`
+- v1.7.0 标签：`bri-video-srt-v1.7.0`
 
 需要回退时优先使用 `git revert` 撤销对应版本提交，避免改写仓库历史。不要用 `git reset --hard`。
 
 ```bash
 # 先查看两个版本间只属于该 skill 的变化
-git diff bri-video-srt-v1.5.0..bri-video-srt-v1.6.0 -- \
+git diff bri-video-srt-v1.6.0..bri-video-srt-v1.7.0 -- \
   skills/bri-video-srt .claude-plugin/marketplace.json
 
-# 在保留历史的前提下撤销 v1.6.0
-git revert bri-video-srt-v1.6.0
+# 在保留历史的前提下撤销 v1.7.0
+git revert bri-video-srt-v1.7.0
 ```

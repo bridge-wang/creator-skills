@@ -3,7 +3,11 @@
     {
       "id": "pause_001",
       "classification": "wait_generation",
-      "reason": "发送提示词后结果区从空白逐步出现文字，属于模型生成过程"
+      "reason": "发送提示词后结果区从空白逐步出现文字，属于模型生成过程",
+      "visual_evidence": "12.40 秒还是空白结果区，13.10 秒出现生成指示，14.60 秒已出现首段回答",
+      "protected_ranges_seconds": [
+        {"start": 12.4, "end": 14.6}
+      ]
     },
     {
       "id": "pause_002",

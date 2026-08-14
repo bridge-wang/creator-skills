@@ -111,6 +111,10 @@ Repartitioning:
 - Preserve the original combined time span for the affected cues.
 - Place the new boundary proportionally by text weight unless the user provides an exact timestamp. The helper script does this for `repartition_pair` and `split` operations.
 
+Cue-boundary punctuation:
+- Never leave a cue ending in a dangling connector such as `、`、`，`、`；`. A trailing `、` usually means a coordinate pair (`X、Y`) got cut exactly at the comma. Either drop the trailing punctuation (the cue break itself already signals the pause), or better, move the whole `、`-joined pair into the same cue if the display-length budget allows, and choose a different split point instead (e.g. before the shared modifier, not between the two coordinated items).
+- The `split`/`repartition_pair`/`repartition_span` operations automatically strip a dangling leading/trailing `、，,；;：:` from the pieces you provide, and `lint` flags any surviving one — but prefer picking a split point that avoids the problem in the first place rather than relying on the strip.
+
 Display length:
 - Treat `而物理AI，就是为了做这种现实任务而产生的` as the single-line visual limit reference. The automatic max subtitle length is this reference's character count minus 2 characters for safety.
 - Every delivered cue should be at or below that display-length budget. If a semantic merge would exceed the budget, first merge to recover meaning, then split again at the best semantic boundary.

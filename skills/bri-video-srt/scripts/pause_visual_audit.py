@@ -2,16 +2,15 @@
 """粗剪前审计长静音：用画面和语义区分操作等待与普通口播停顿。
 
 prepare 从 auto-editor 原始 cutlist 中列出长静音，附上前后 SRT 语义，并按每段
-“开始 / 中间 / 结束”三帧生成联系表。模型或人工查看联系表后填写 classification
+“停顿前 / 开始 / 中间 / 结束 / 停顿后”五帧生成联系表。模型或人工查看联系表后填写 classification
 和 reason。apply 只在所有候选都已分类时继续：普通口播停顿交给 autocut 压缩；
-操作型空白不超过 7 秒时完整保留，超过时保留首尾各一半并裁掉中间。候选内部若
-可能存在低声口播则不执行 7 秒上限，避免把人的话误当空白。
+操作型空白必须提供正向画面证据和最小保护窗口，保护窗口总计最多 7 秒。候选内部若
+可能存在低声口播则完整保留，避免把人的话误当空白。
 """
 from __future__ import annotations
 
 import argparse
 import json
-import math
 import re
 import subprocess
 from pathlib import Path
@@ -23,10 +22,9 @@ PROTECTED_CLASSES = {
     "page_switch",
     "typing_or_input",
     "quiet_speech",
-    "retake_context",
-    "uncertain",
 }
-COMPRESS_CLASSES = {"ordinary_speech_pause"}
+REVIEW_CLASSES = {"retake_context", "uncertain"}
+COMPRESS_CLASSES = {"ordinary_speech_pause"} | REVIEW_CLASSES
 ALLOWED_CLASSES = PROTECTED_CLASSES | COMPRESS_CLASSES
 OPERATION_RE = re.compile(
     r"打开|点击|点开|粘贴|输入|发送|提交|等待|回答|返回|切换|跳转|滚动|"
@@ -103,6 +101,8 @@ def surrounding_text(cues, start, end, count=2):
 def build_candidates(payload, fps, cues, minimum_duration, silences=None):
     silences = silences or []
     candidates = []
+    media_end = max(end_frame for _, end_frame, _ in payload["chunks"]) / fps
+    last_frame_time = max(0.0, media_end - 1 / fps)
     for start_frame, end_frame, speed in payload["chunks"]:
         if float(speed) == 1.0:
             continue
@@ -126,10 +126,15 @@ def build_candidates(payload, fps, cues, minimum_duration, silences=None):
             "confirmed_silence_ratio": round(silence_ratio, 6),
             "possible_quiet_speech": bool(inside) and silence_ratio < 0.9,
             "semantic_operation_signal": bool(OPERATION_RE.search(context)),
+            "sample_labels": [
+                "context_before", "pause_start", "pause_middle", "pause_end", "context_after",
+            ],
             "sample_times": [
+                round(max(0.0, start - 0.2), 6),
                 round(min(end, start + 0.1), 6),
                 round((start + end) / 2, 6),
                 round(max(start, end - 0.1), 6),
+                round(min(last_frame_time, end + 0.2), 6),
             ],
             "classification": None,
             "reason": "",
@@ -147,8 +152,8 @@ def render_contact_sheets(media, candidates, fps, sheet_dir, group_size=10):
     for offset in range(0, len(candidates), group_size):
         group = candidates[offset:offset + group_size]
         times = [value for item in group for value in item["sample_times"]]
-        columns = 6
-        rows = math.ceil(len(times) / columns)
+        columns = 5
+        rows = len(group)
         target = sheet_dir / f"pause-audit-{offset // group_size + 1:02d}.jpg"
         filters = (
             f"select='{select_expression(times, fps)}',scale=400:-2,"
@@ -163,27 +168,62 @@ def render_contact_sheets(media, candidates, fps, sheet_dir, group_size=10):
         sheets.append({
             "path": str(target),
             "candidate_ids": [item["id"] for item in group],
-            "layout": "每个候选连续三帧（开始/中间/结束），每行两个候选",
+            "layout": "每行一个候选，从左到右为停顿前/开始/中间/结束/停顿后",
         })
     return sheets
 
 
+def merge_ranges(ranges):
+    merged = []
+    for start, end in sorted(ranges):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def take_frame_budget(ranges, budget, reverse=False):
+    selected = []
+    sequence = list(reversed(ranges)) if reverse else ranges
+    for start, end in sequence:
+        if budget <= 0:
+            break
+        size = min(end - start, budget)
+        selected.append((end - size, end) if reverse else (start, start + size))
+        budget -= size
+    return list(reversed(selected)) if reverse else selected
+
+
 def protected_retention_frames(item, fps, max_protected_pause):
-    """返回受保护候选需要恢复的帧段；长空白均分保留首尾。"""
-    start = round(float(item["start"]) * fps)
-    end = round(float(item["end"]) * fps)
+    """返回受保护候选需要恢复的最小帧段。"""
+    candidate_start = round(float(item["start"]) * fps)
+    candidate_end = round(float(item["end"]) * fps)
+    explicit = item.get("protected_ranges_seconds") or []
+    ranges = merge_ranges([
+        (round(float(value["start"]) * fps), round(float(value["end"]) * fps))
+        for value in explicit
+    ]) if explicit else [(candidate_start, candidate_end)]
     if item.get("possible_quiet_speech") or max_protected_pause is None:
-        return [(start, end)]
+        return ranges
     cap_frames = max(0, round(float(max_protected_pause) * fps))
-    if end - start <= cap_frames:
-        return [(start, end)]
+    total_frames = sum(end - start for start, end in ranges)
+    if total_frames <= cap_frames:
+        return ranges
     left_frames = cap_frames // 2
     right_frames = cap_frames - left_frames
-    return [(start, start + left_frames), (end - right_frames, end)]
+    return merge_ranges(
+        take_frame_budget(ranges, left_frames)
+        + take_frame_budget(ranges, right_frames, reverse=True)
+    )
+
+
+def is_protected(item):
+    return bool(item.get("possible_quiet_speech")) or item["classification"] in PROTECTED_CLASSES
 
 
 def apply_protected_ranges(payload, fps, candidates, max_protected_pause=7.0):
-    protected = [item for item in candidates if item["classification"] in PROTECTED_CLASSES]
+    protected = [item for item in candidates if is_protected(item)]
     retention = [
         interval
         for item in protected
@@ -225,6 +265,22 @@ def validate_classifications(candidates):
             errors.append(
                 f"{item.get('id')}: 候选内部可能存在低声口播，不能按普通静音压缩"
             )
+        if (classification in PROTECTED_CLASSES - {"quiet_speech"}
+                and not item.get("possible_quiet_speech")):
+            if not str(item.get("visual_evidence", "")).strip():
+                errors.append(f"{item.get('id')}: 保护分类必须填写 visual_evidence")
+            ranges = item.get("protected_ranges_seconds")
+            if not isinstance(ranges, list) or not ranges:
+                errors.append(f"{item.get('id')}: 保护分类必须填写 protected_ranges_seconds")
+                continue
+            for index, value in enumerate(ranges, start=1):
+                try:
+                    start, end = float(value["start"]), float(value["end"])
+                except (KeyError, TypeError, ValueError):
+                    errors.append(f"{item.get('id')}: 保护窗口 {index} 格式无效")
+                    continue
+                if start < float(item["start"]) or end > float(item["end"]) or end <= start:
+                    errors.append(f"{item.get('id')}: 保护窗口 {index} 必须位于候选内且 end > start")
     if errors:
         raise SystemExit("\n".join(errors))
 
@@ -239,6 +295,8 @@ def merge_decisions(candidates, decisions):
         if decision:
             item["classification"] = decision.get("classification")
             item["reason"] = decision.get("reason", "")
+            item["visual_evidence"] = decision.get("visual_evidence", "")
+            item["protected_ranges_seconds"] = decision.get("protected_ranges_seconds", [])
     return candidates
 
 
@@ -259,7 +317,8 @@ def prepare(args):
             "protected": sorted(PROTECTED_CLASSES),
             "compressed": sorted(COMPRESS_CLASSES),
             "rule": (
-                "普通口播停顿压到 1.05 秒；操作型空白最多保留 7 秒并均分首尾；"
+                "普通口播停顿压到 1.05 秒；操作型候选必须记录正向画面证据和最小保护窗口，"
+                "窗口总计最多保留 7 秒；uncertain/retake_context 默认压缩；"
                 "可能存在低声口播时完整保留。"
             ),
         },
@@ -286,9 +345,10 @@ def apply(args):
     combined = apply_protected_ranges(
         payload, fps, candidates, max_protected_pause=args.max_protected_pause,
     )
-    protected = [item for item in candidates if item["classification"] in PROTECTED_CLASSES]
+    protected = [item for item in candidates if is_protected(item)]
     for item in protected:
         retention = protected_retention_frames(item, fps, args.max_protected_pause)
+        uncapped_retention = protected_retention_frames(item, fps, None)
         item["retained_ranges_seconds"] = [
             {"start": round(start / fps, 6), "end": round(end / fps, 6)}
             for start, end in retention
@@ -298,8 +358,13 @@ def apply(args):
         )
         item["capped_to_seconds"] = (
             args.max_protected_pause
-            if item["retained_duration_seconds"] + 1e-6 < float(item["duration"])
+            if (not item.get("possible_quiet_speech")
+                and sum(end - start for start, end in uncapped_retention)
+                > round(args.max_protected_pause * fps))
             else None
+        )
+        item["partial_protection"] = bool(item.get("protected_ranges_seconds")) and (
+            item["retained_duration_seconds"] + 1e-6 < float(item["duration"])
         )
     capped = [item for item in protected if item["capped_to_seconds"] is not None]
     report.update({

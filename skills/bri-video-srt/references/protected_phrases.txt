@@ -28,3 +28,4 @@ skill
 一年时间内
 日更100条
 Stack Overflow
+garbage in,garbage out
