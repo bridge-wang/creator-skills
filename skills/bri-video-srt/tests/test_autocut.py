@@ -14,10 +14,21 @@ SPEC.loader.exec_module(MODULE)
 
 
 class AutocutTests(unittest.TestCase):
+    def test_padding_uses_the_full_requested_pause(self):
+        padded = MODULE.add_benchmark_padding(
+            [(1.0, 2.0), (4.0, 5.0)], 6.0, 1.05, 0.17, 0.37,
+        )
+        retained_pause = (padded[0][1] - 2.0) + (4.0 - padded[1][0])
+        self.assertAlmostEqual(retained_pause, 1.05)
+
     def test_progress_ignores_ffmpeg_na_and_invalid_values(self):
         self.assertIsNone(MODULE.parse_progress_seconds("out_time_ms", "N/A"))
         self.assertIsNone(MODULE.parse_progress_seconds("out_time_us", "nan"))
         self.assertIsNone(MODULE.parse_progress_seconds("progress", "end"))
+
+    def test_reuse_report_is_explicit(self):
+        args = MODULE.parse_args(["source.mp4", "old.json", "new.mp4", "--reuse-report"])
+        self.assertTrue(args.reuse_report)
 
     def test_progress_uses_expected_output_duration(self):
         seconds = MODULE.parse_progress_seconds("out_time_ms", "281000000")
@@ -31,12 +42,29 @@ class AutocutTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "cutlist.json"
             args = argparse.Namespace(max_pause=1.05, head_pad=0.17, tail_pad=0.37)
+            ranges = MODULE.quantize_keep_ranges([(0.0, 4.0), (5.0, 9.0)], 30)
             MODULE.write_cutlist_report(
                 target, "source.mp4", "output.mp4", 10.0, args,
-                [(0.0, 4.0), (5.0, 9.0)], None,
+                ranges, None, requested_duration=8.0,
             )
             payload = json.loads(target.read_text(encoding="utf-8"))
             self.assertEqual(payload["expected_output_duration_seconds"], 8.0)
+            self.assertEqual(payload["render_strategy"], "paired_segment_concat_v1")
+
+    def test_cut_boundaries_are_quantized_once_for_both_streams(self):
+        ranges = MODULE.quantize_keep_ranges([(0.011, 1.011), (2.019, 3.019)], 60)
+        self.assertEqual(ranges[0]["start_frame"], 1)
+        self.assertEqual(ranges[0]["end_frame"], 61)
+        self.assertAlmostEqual(ranges[1]["output_start"], 1.0)
+
+    def test_filter_graph_pairs_trimmed_video_and_audio_before_concat(self):
+        ranges = MODULE.quantize_keep_ranges([(0.011, 1.011), (2.019, 3.019)], 60)
+        graph = MODULE.build_paired_concat_filter(ranges)
+        self.assertIn("trim=start_frame=1:end_frame=61", graph)
+        self.assertIn("atrim=start=0.016666667:end=1.016666667", graph)
+        self.assertIn("concat=n=2:v=1:a=1[vout][aout]", graph)
+        self.assertNotIn("select=", graph)
+        self.assertNotIn("aselect=", graph)
 
 
 if __name__ == "__main__":

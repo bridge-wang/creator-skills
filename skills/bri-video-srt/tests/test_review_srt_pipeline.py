@@ -33,6 +33,7 @@ class ReviewSrtPipelineTests(unittest.TestCase):
             self.assertIn("auto", commands[0])
             self.assertIn("lint", commands[1])
             self.assertIn("srt_audio_reanchor.py", commands[2][1])
+            self.assertIn("--threshold=-35dB", commands[2])
 
     def test_lint_failure_stops_before_reanchor(self):
         with tempfile.TemporaryDirectory() as directory:

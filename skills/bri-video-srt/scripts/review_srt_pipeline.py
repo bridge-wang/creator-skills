@@ -31,7 +31,7 @@ def build_commands(args):
         [sys.executable, str(CALIBRATE), "lint", str(args.draft_srt),
          "--max-chars", str(args.max_chars)],
         [sys.executable, str(REANCHOR), str(args.media), str(args.draft_srt),
-         str(args.output_srt), "--threshold", args.threshold],
+         str(args.output_srt), f"--threshold={args.threshold}"],
         [sys.executable, str(TYPOGRAPHY), str(args.output_srt)],
         [sys.executable, str(CALIBRATE), "lint", str(args.output_srt),
          "--max-chars", str(args.max_chars)],

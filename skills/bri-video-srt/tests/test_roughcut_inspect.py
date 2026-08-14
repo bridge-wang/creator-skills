@@ -17,6 +17,24 @@ class RoughcutInspectTests(unittest.TestCase):
         self.assertEqual(MODULE.source_time_to_output(20, keep), 10)
         self.assertEqual(MODULE.source_time_to_output(25, keep), 15)
 
+    def test_source_time_uses_rendered_segment_boundaries(self):
+        keep = [
+            {"start": 0, "end": 10, "output_start": 0, "output_end": 10.1},
+            {"start": 20, "end": 30, "output_start": 10.1, "output_end": 20.2},
+        ]
+        self.assertEqual(MODULE.source_time_to_output(20, keep), 10.1)
+        self.assertAlmostEqual(MODULE.source_time_to_output(25, keep), 15.1)
+
+    def test_av_sync_metrics_include_start_and_end(self):
+        probe = {"streams": [
+            {"codec_type": "video", "start_time": "0", "duration": "10.000"},
+            {"codec_type": "audio", "start_time": "0.010", "duration": "9.980"},
+        ]}
+        metrics = MODULE.av_sync_metrics(probe)
+        self.assertAlmostEqual(metrics["start_delta_seconds"], 0.01)
+        self.assertAlmostEqual(metrics["end_delta_seconds"], -0.01)
+        self.assertAlmostEqual(metrics["max_absolute_delta_seconds"], 0.01)
+
     def test_sample_times_include_both_sides_of_each_repeat_cut(self):
         cutlist = {
             "kept_ranges_seconds": [{"start": 0, "end": 10}, {"start": 20, "end": 30}],
