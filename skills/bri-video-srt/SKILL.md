@@ -87,6 +87,7 @@ auto-editor "<原始视频>" --edit "audio:threshold=4%" --margin 0sec \
   - `left_anchors`：剪切前一条必须完整保留的语义短语，可提供多个识别变体；
   - `right_anchors`：完整重说开头必须出现的语义短语，可提供多个识别变体。
 - 左右锚点应选对 ASR 小幅错字稳健的核心短语，不要依赖容易误识别的单个专名。默认预览每个切点左侧 10 秒、右侧 5 秒。
+- 在 `snap_radius` 内，保留句切点默认吸附到**离 `retain_hint` 最近**的合格长静音末端；距离相同时才选更长的静音。这样不会因更早的停顿更长而错误吸附。音频锚点门禁仍是最终裁决，不能只相信吸附距离。
 
 先生成合并 cutlist 和一次性音频预览：
 
@@ -123,7 +124,7 @@ python3 "<SKILL_DIR>/scripts/autocut.py" \
 ```
 
 - 不能只删 SRT 文字：每一段实际删除范围都要写入源视频时间戳和剪辑清单。把已验证的重复范围写入 `manual_repeat_ranges_seconds`。
-- 用 `ffprobe` 对比源与粗剪视频的 `pix_fmt`、`color_space`、`color_primaries`、`color_transfer`；任一项不一致即停止交付。
+- `autocut.py` 用预计成片时长而不是原片时长计算进度；ffmpeg 收尾的 `out_time_ms=N/A` 必须安全忽略，并只在进程成功退出后显示 100%。因此进度解析异常不能再阻止已经成功的编码写出 cutlist。
 - 记录抽轨、分析/转写、预检、4K 导出和成片复检的墙钟时间。向用户报告真实百分比时应使用可观测的 ffmpeg 进度；拿不到精确进度就明确说是估算。
 
 ### A4. 生成与粗剪视频同步的审核 SRT
@@ -142,25 +143,39 @@ python3 "<SKILL_DIR>/scripts/roughcut_preflight.py" validate-final \
   --srt "<临时目录>/<basename>.rough-cut.raw.srt" \
   --candidates "<临时目录>/<basename>.repeat-candidates.json"
 
-# 轻量术语修正，再输出与粗剪视频同步的审核字幕
-python3 "<SKILL_DIR>/scripts/srt_calibrate.py" auto \
-  "<临时目录>/<basename>.rough-cut.raw.srt" \
-  --output "<临时目录>/<basename>.rough-cut.draft.srt"
-
-# 用粗剪音轨重锚定，写出唯一的审核字幕
-python3 "<SKILL_DIR>/scripts/srt_audio_reanchor.py" \
+# 一次性执行：自动校准/拆分 → 草稿 lint → 重锚定 → 排版 → 最终 lint
+python3 "<SKILL_DIR>/scripts/review_srt_pipeline.py" \
   "<审核目录>/<basename>.rough-cut.mp4" \
-  "<临时目录>/<basename>.rough-cut.draft.srt" \
-  "<审核目录>/<basename>.rough-cut.srt"
-python3 "<SKILL_DIR>/scripts/zh_typography.py" "<审核目录>/<basename>.rough-cut.srt"
-python3 "<SKILL_DIR>/scripts/srt_calibrate.py" lint "<审核目录>/<basename>.rough-cut.srt"
+  "<临时目录>/<basename>.rough-cut.raw.srt" \
+  "<审核目录>/<basename>.rough-cut.srt" \
+  --draft-srt "<临时目录>/<basename>.rough-cut.draft.srt"
 ```
 
 - 审核 SRT 的作用是让用户在剪映中更低成本地检查口播、重复与节奏；不做人工语义精修，避免把最终字幕工作重复一遍。
 - 只有在粗剪视频完成后重新转写，审核 SRT 才能与它严格同轴。
+- `review_srt_pipeline.py` 必须先让草稿通过显示长度与时序 lint，才运行整片音频重锚定。草稿失败时先修复；人工修好草稿后用 `--skip-auto` 继续，避免重复跑 `silencedetect`。
 - `validate-final` 必须 N/N 通过。若预检通过而成片失败，停止交付并报告该实验性门禁的失效原因；不要静默启动第二次整片 4K 渲染。
 
-### A5. 阶段 A 交付并停止
+### A5. 单次完整解码与画面验收
+
+审核 SRT 通过后，用同一个 ffmpeg 解码进程同时完成完整音视频解码、代表帧抽取和全部重复切点前后截图：
+
+```bash
+python3 "<SKILL_DIR>/scripts/roughcut_inspect.py" \
+  --source "<原始视频>" \
+  --output "<审核目录>/<basename>.rough-cut.mp4" \
+  --cutlist "<审核目录>/<basename>.rough-cut.cutlist.json" \
+  --srt "<审核目录>/<basename>.rough-cut.srt" \
+  --sheet "<临时目录>/<basename>.inspection.jpg" \
+  --report "<临时目录>/<basename>.inspection.json"
+```
+
+- 脚本必须验证完整解码成功，并对比宽高、帧率、`pix_fmt`、`color_space`、`color_primaries`、`color_transfer`；任一项不一致即停止交付。
+- 脚本必须核对 cutlist 预计时长、成片实际时长和 SRT 末尾。默认允许 AAC/容器产生最多 `0.5` 秒首尾差异。
+- 必须打开联系表肉眼检查。它包含整片代表帧，以及每个高置信度重复切点前后各一帧；不要再另跑一次完整解码或另生成第二张抽查图。
+- 联系表和检查 JSON 只放临时目录，不增加阶段 A 的正式交付物。
+
+### A6. 阶段 A 交付并停止
 
 交付且仅交付审核目录中的 `<basename>.rough-cut.mp4`、`<basename>.rough-cut.srt` 与 `<basename>.rough-cut.cutlist.json`，说明删了哪些长气口、哪些重复口播。**不要在此时制作最终字幕，更不要烧录。**
 

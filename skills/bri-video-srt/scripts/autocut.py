@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""色彩无损删气口：auto-editor 出原始剪切点，按口播节奏补回留白后重编码。
+"""色彩保真删气口：按声音区间补回留白后，只执行一次 4K 重编码。
 
 用法：autocut.py <input.MOV> <cutlist_v1.json> <output.mp4> [留白参数]
 输出保持源视频的 pix_fmt / color_primaries / color_trc / colorspace 不变。
 
-默认留白来自课程对标视频：句间停顿最多 1.05 秒、片头 0.17 秒、片尾 0.37 秒。
-生成 cutlist 时必须给 auto-editor 传 ``--margin 0sec``，避免重复补白。
-
-编码器：macOS 上优先用 hevc_videotoolbox（硬件编码，快）；
-不可用时回退 libx265（软件编码，慢但各平台通用）。
+进度以预计成片时长为分母，而不是原片时长。ffmpeg 收尾可能把
+``out_time_ms`` 写成 ``N/A``；这种状态只表示进度值不可用，不应让已经完成的
+编码和后续 cutlist 报告失败。
 """
 import argparse
 import json
+import math
 import subprocess
 import sys
+from pathlib import Path
 
 
-def parse_args():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("src")
     parser.add_argument("cutlist")
@@ -41,7 +41,7 @@ def parse_args():
         "--tail-pad", type=float, default=0.37,
         help="最后一处声音后保留的片尾静音秒数（默认：0.37）",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     for name in ("max_pause", "head_pad", "tail_pad"):
         if getattr(args, name) < 0:
             parser.error(f"--{name.replace('_', '-')} 不能为负数")
@@ -68,75 +68,27 @@ def add_benchmark_padding(raw_keep, duration, max_pause, head_pad, tail_pad):
     return padded
 
 
-args = parse_args()
-src, cutlist_path, dst = args.src, args.cutlist, args.dst
+def parse_progress_seconds(key, value):
+    """解析 ffmpeg progress；N/A、空值和非有限值都安全忽略。"""
+    if key not in {"out_time_ms", "out_time_us"}:
+        return None
+    try:
+        microseconds = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(microseconds) or microseconds < 0:
+        return None
+    return microseconds / 1_000_000
 
-preflight = None
-if args.preflight_report:
-    with open(args.preflight_report, encoding="utf-8") as preflight_file:
-        preflight = json.load(preflight_file)
-    if preflight.get("preflight_pass") is not True:
-        raise SystemExit("预检报告未 N/N 通过，禁止启动 4K 导出")
 
-probe_data = json.loads(subprocess.check_output([
-    "ffprobe", "-v", "error", "-select_streams", "v:0",
-    "-show_entries", "stream=r_frame_rate,pix_fmt,color_space,color_primaries,color_transfer",
-    "-show_entries", "format=duration", "-of", "json", src]))
-probe = probe_data["streams"][0]
-duration = float(probe_data["format"]["duration"])
-num, den = map(int, probe["r_frame_rate"].split("/"))
-fps = num / den
+def progress_percent(seconds, expected_duration):
+    """编码未收尾前最多显示 99%；100% 只在 ffmpeg 成功退出后打印。"""
+    if seconds is None or expected_duration <= 0:
+        return None
+    return min(99, max(0, int(seconds / expected_duration * 100)))
 
-with open(cutlist_path, encoding="utf-8") as cutlist_file:
-    chunks = json.load(cutlist_file)["chunks"]
-raw_keep = [(s / fps, e / fps) for s, e, speed in chunks if float(speed) == 1.0]
-if not raw_keep:
-    raise SystemExit("没有可保留的片段")
-keep = add_benchmark_padding(
-    raw_keep, duration, args.max_pause, args.head_pad, args.tail_pad,
-)
 
-vf = "+".join(f"between(t,{s:.4f},{e:.4f})" for s, e in keep)
-ten_bit = "10le" in probe.get("pix_fmt", "")
-
-encoders = subprocess.check_output(["ffmpeg", "-v", "error", "-encoders"], text=True)
-if "hevc_videotoolbox" in encoders:
-    codec = ["-c:v", "hevc_videotoolbox", "-q:v", "60"]
-else:
-    codec = ["-c:v", "libx265", "-crf", "20", "-preset", "medium"]
-
-cmd = [
-    "ffmpeg", "-y", "-v", "error", "-nostats", "-progress", "pipe:1", "-i", src,
-    "-vf", f"select='{vf}',setpts=N/FRAME_RATE/TB",
-    "-af", f"aselect='{vf}',asetpts=N/SR/TB",
-    *codec, "-tag:v", "hvc1",
-    "-pix_fmt", "p010le" if ten_bit else "yuv420p",
-    "-colorspace", probe.get("color_space", "bt709"),
-    "-color_primaries", probe.get("color_primaries", "bt709"),
-    "-color_trc", probe.get("color_transfer", "bt709"),
-    "-c:a", "aac", "-b:a", "192k",
-    dst,
-]
-with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as process:
-    last_percent = -1
-    for line in process.stdout:
-        key, _, value = line.strip().partition("=")
-        if key == "out_time_ms":
-            percent = min(100, int(float(value) / 1_000_000 / duration * 100))
-            if percent >= last_percent + 2:
-                print(f"4K 导出进度：{percent}%", file=sys.stderr, flush=True)
-                last_percent = percent
-    stderr = process.stderr.read()
-    return_code = process.wait()
-if return_code:
-    if stderr:
-        print(stderr, file=sys.stderr)
-    raise SystemExit(return_code)
-if last_percent < 100:
-    print("4K 导出进度：100%", file=sys.stderr, flush=True)
-kept_duration = sum(end - start for start, end in keep)
-removed = max(0.0, duration - kept_duration)
-if args.report:
+def write_cutlist_report(path, src, dst, duration, args, keep, preflight):
     removed_ranges = []
     cursor = 0.0
     for start, end in keep:
@@ -172,26 +124,99 @@ if args.report:
         "source": src,
         "output": dst,
         "duration_seconds": round(duration, 6),
+        "expected_output_duration_seconds": round(sum(end - start for start, end in keep), 6),
         "padding_seconds": {
             "max_pause": args.max_pause,
             "head_pad": args.head_pad,
             "tail_pad": args.tail_pad,
         },
         "kept_ranges_seconds": [
-            {"start": round(start, 6), "end": round(end, 6)}
-            for start, end in keep
+            {"start": round(start, 6), "end": round(end, 6)} for start, end in keep
         ],
         "removed_ranges_seconds": removed_ranges,
         "manual_repeat_ranges_seconds": manual_repeats,
         "preflight_pass": preflight.get("preflight_pass") if preflight else None,
     }
-    with open(args.report, "w", encoding="utf-8") as report_file:
-        json.dump(report, report_file, ensure_ascii=False, indent=2)
-        report_file.write("\n")
-print(
-    f"完成：保留 {len(keep)} 段，删去 {removed:.1f} 秒气口；"
-    f"句间≤{args.max_pause:.2f}s，片头 {args.head_pad:.2f}s，"
-    f"片尾 {args.tail_pad:.2f}s → {dst}"
-)
-if args.report:
-    print(f"剪辑时间记录 → {args.report}")
+    Path(path).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    src, cutlist_path, dst = args.src, args.cutlist, args.dst
+
+    preflight = None
+    if args.preflight_report:
+        preflight = json.loads(Path(args.preflight_report).read_text(encoding="utf-8"))
+        if preflight.get("preflight_pass") is not True:
+            raise SystemExit("预检报告未 N/N 通过，禁止启动 4K 导出")
+
+    probe_data = json.loads(subprocess.check_output([
+        "ffprobe", "-v", "error", "-select_streams", "v:0",
+        "-show_entries", "stream=r_frame_rate,pix_fmt,color_space,color_primaries,color_transfer",
+        "-show_entries", "format=duration", "-of", "json", src,
+    ]))
+    probe = probe_data["streams"][0]
+    duration = float(probe_data["format"]["duration"])
+    num, den = map(int, probe["r_frame_rate"].split("/"))
+    fps = num / den
+
+    chunks = json.loads(Path(cutlist_path).read_text(encoding="utf-8"))["chunks"]
+    raw_keep = [(start / fps, end / fps) for start, end, speed in chunks if float(speed) == 1.0]
+    if not raw_keep:
+        raise SystemExit("没有可保留的片段")
+    keep = add_benchmark_padding(
+        raw_keep, duration, args.max_pause, args.head_pad, args.tail_pad,
+    )
+    expected_duration = sum(end - start for start, end in keep)
+
+    vf = "+".join(f"between(t,{start:.4f},{end:.4f})" for start, end in keep)
+    ten_bit = "10le" in probe.get("pix_fmt", "")
+    encoders = subprocess.check_output(["ffmpeg", "-v", "error", "-encoders"], text=True)
+    if "hevc_videotoolbox" in encoders:
+        codec = ["-c:v", "hevc_videotoolbox", "-q:v", "60"]
+    else:
+        codec = ["-c:v", "libx265", "-crf", "20", "-preset", "medium"]
+
+    cmd = [
+        "ffmpeg", "-y", "-v", "error", "-nostats", "-progress", "pipe:1", "-i", src,
+        "-vf", f"select='{vf}',setpts=N/FRAME_RATE/TB",
+        "-af", f"aselect='{vf}',asetpts=N/SR/TB",
+        *codec, "-tag:v", "hvc1",
+        "-pix_fmt", "p010le" if ten_bit else "yuv420p",
+        "-colorspace", probe.get("color_space", "bt709"),
+        "-color_primaries", probe.get("color_primaries", "bt709"),
+        "-color_trc", probe.get("color_transfer", "bt709"),
+        "-c:a", "aac", "-b:a", "192k", dst,
+    ]
+    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as process:
+        last_percent = -1
+        for line in process.stdout:
+            key, _, value = line.strip().partition("=")
+            seconds = parse_progress_seconds(key, value)
+            percent = progress_percent(seconds, expected_duration)
+            if percent is not None and percent >= last_percent + 2:
+                print(f"4K 导出进度：{percent}%", file=sys.stderr, flush=True)
+                last_percent = percent
+        stderr = process.stderr.read()
+        return_code = process.wait()
+    if return_code:
+        if stderr:
+            print(stderr, file=sys.stderr)
+        raise SystemExit(return_code)
+    print("4K 导出进度：100%", file=sys.stderr, flush=True)
+
+    removed = max(0.0, duration - expected_duration)
+    if args.report:
+        write_cutlist_report(args.report, src, dst, duration, args, keep, preflight)
+    print(
+        f"完成：保留 {len(keep)} 段，删去 {removed:.1f} 秒气口；"
+        f"句间≤{args.max_pause:.2f}s，片头 {args.head_pad:.2f}s，"
+        f"片尾 {args.tail_pad:.2f}s → {dst}"
+    )
+    if args.report:
+        print(f"剪辑时间记录 → {args.report}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

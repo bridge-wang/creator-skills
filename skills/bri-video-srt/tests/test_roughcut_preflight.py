@@ -14,11 +14,25 @@ SPEC.loader.exec_module(MODULE)
 
 
 class RoughcutPreflightTests(unittest.TestCase):
-    def test_resolve_prefers_longest_nearby_silence_end(self):
+    def test_resolve_prefers_nearest_qualifying_silence_end(self):
         candidate = [{"id": "take", "retain_hint": 20, "discard_start": 10,
                       "left_anchors": ["前句"], "right_anchors": ["后句"]}]
         result = MODULE.resolve_ranges(candidate, [[13, 16], [17, 19.8], [30, 40]])
-        self.assertEqual(result[0]["discard_end"], 16)
+        self.assertEqual(result[0]["discard_end"], 19.8)
+        self.assertEqual(result[0]["snap_selection"], "nearest_end_then_longest")
+
+    def test_resolve_uses_longer_silence_only_when_distance_ties(self):
+        candidate = [{"id": "take", "retain_hint": 20, "discard_start": 10,
+                      "left_anchors": ["前句"], "right_anchors": ["后句"]}]
+        result = MODULE.resolve_ranges(candidate, [[15, 19], [18, 21]])
+        self.assertEqual(result[0]["discard_end"], 19)
+
+    def test_third_lesson_regression_chooses_near_complete_retake(self):
+        candidate = [{"id": "quality", "retain_hint": 445.72, "discard_start": 423.72,
+                      "left_anchors": ["三手理解"], "right_anchors": ["分析到了这一步"]}]
+        intervals = [[431.181875, 439.533313], [440.748688, 444.76225]]
+        result = MODULE.resolve_ranges(candidate, intervals)
+        self.assertEqual(result[0]["discard_end"], 444.76225)
 
     def test_apply_ranges_turns_only_overlapping_keep_frames_into_cut(self):
         payload = {"chunks": [[0, 100, 1.0], [100, 120, 99999.0], [120, 200, 1.0]]}

@@ -44,19 +44,23 @@ def resolve_ranges(candidates, intervals):
     for item in candidates:
         hint = float(item["retain_hint"])
         nearby = [
-            (end - start, abs(end - hint), start, end)
+            (abs(end - hint), -(end - start), start, end)
             for start, end in intervals
             if abs(end - hint) <= float(item.get("snap_radius", 6.5))
             and end - start >= float(item.get("min_supporting_silence", 1.0))
         ]
         if not nearby:
             raise SystemExit(f"{item['id']}: no qualifying silence near {hint}")
-        duration, _, silence_start, silence_end = max(
-            nearby, key=lambda value: (value[0], -value[1]))
+        # retain_hint 是完整重说开头的语义提示，因此先选结束点离 hint 最近的
+        # 合格长静音；距离完全相同时再选更长的静音。旧版“最长优先”可能吸附到
+        # 更早的长停顿，第三课实测即因此多跑了一轮预检。
+        distance, negative_duration, silence_start, silence_end = min(nearby)
+        duration = -negative_duration
         resolved.append({
             **item,
             "discard_end": round(silence_end, 6),
             "snap_distance": round(silence_end - hint, 6),
+            "snap_selection": "nearest_end_then_longest",
             "supporting_silence": {
                 "start": round(silence_start, 6), "end": round(silence_end, 6),
                 "duration": round(duration, 6),
