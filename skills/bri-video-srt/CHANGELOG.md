@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.0 — 2026-08-14
+
+- 新增 `pause_visual_audit.py`：在实操演示粗剪前，把长静音按开始/中间/结束三帧和前后口播联合审计，区分操作、输入、页面切换、等待生成、普通口播停顿与疑似重说。
+- 操作型停顿和不确定区间默认完整保留；只有普通口播停顿才交给 `1.05` 秒规则压缩，避免网页瞬移、提示词突变或模型回答凭空出现。
+- 所有候选必须填写分类和理由才能通过门禁；cutlist 新增受保护操作区间与审计状态，未完成审计时禁止实操型素材启动 4K 导出。
+- 低于 auto-editor 4% 阈值但仍含 ASR 文字的区间按低声口播保护；疑似重说也先保留，只有重复口播语义门禁确认后才能删除。
+- 使用第三课当前 13 分 51 秒素材做真实回归，覆盖粘贴链接、等待豆包回答、滚动结果、语音输入提示词、验证码和生成结果等场景。
+
 ## 1.4.1 — 2026-08-14
 
 - 修复粗剪多切点后的渐进式口型漂移：不再分别用 `select` / `aselect` 压缩音视频时间轴，改为统一量化到视频帧边界、逐段成对裁切后同步拼接。
@@ -38,14 +46,15 @@
 - v1.3.0 标签：`bri-video-srt-v1.3.0`
 - v1.4.0 标签：`bri-video-srt-v1.4.0`
 - v1.4.1 标签：`bri-video-srt-v1.4.1`
+- v1.5.0 标签：`bri-video-srt-v1.5.0`
 
 需要回退时优先使用 `git revert` 撤销对应版本提交，避免改写仓库历史。不要用 `git reset --hard`。
 
 ```bash
 # 先查看两个版本间只属于该 skill 的变化
-git diff bri-video-srt-v1.4.0..bri-video-srt-v1.4.1 -- \
+git diff bri-video-srt-v1.4.1..bri-video-srt-v1.5.0 -- \
   skills/bri-video-srt .claude-plugin/marketplace.json
 
-# 在保留历史的前提下撤销 v1.4.1
-git revert bri-video-srt-v1.4.1
+# 在保留历史的前提下撤销 v1.5.0
+git revert bri-video-srt-v1.5.0
 ```

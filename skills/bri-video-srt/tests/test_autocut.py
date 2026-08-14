@@ -30,6 +30,16 @@ class AutocutTests(unittest.TestCase):
         args = MODULE.parse_args(["source.mp4", "old.json", "new.mp4", "--reuse-report"])
         self.assertTrue(args.reuse_report)
 
+    def test_protected_ranges_must_reach_the_final_cutlist(self):
+        payload = {"chunks": [[0, 60, 1.0], [60, 180, 99999.0], [180, 240, 1.0]]}
+        audit = {"protected_ranges": [{"id": "wait", "start": 1, "end": 3}]}
+        with self.assertRaises(SystemExit):
+            MODULE.verify_protected_ranges(payload, 60, audit)
+        protected = {"chunks": [[0, 240, 1.0]]}
+        MODULE.verify_protected_ranges(protected, 60, audit)
+        reused_report = {"kept_ranges_seconds": [{"start": 0, "end": 4}]}
+        MODULE.verify_protected_ranges(reused_report, 60, audit)
+
     def test_progress_uses_expected_output_duration(self):
         seconds = MODULE.parse_progress_seconds("out_time_ms", "281000000")
         self.assertEqual(MODULE.progress_percent(seconds, 562), 50)
@@ -50,6 +60,7 @@ class AutocutTests(unittest.TestCase):
             payload = json.loads(target.read_text(encoding="utf-8"))
             self.assertEqual(payload["expected_output_duration_seconds"], 8.0)
             self.assertEqual(payload["render_strategy"], "paired_segment_concat_v1")
+            self.assertEqual(payload["protected_operation_ranges_seconds"], [])
 
     def test_cut_boundaries_are_quantized_once_for_both_streams(self):
         ranges = MODULE.quantize_keep_ranges([(0.011, 1.011), (2.019, 3.019)], 60)

@@ -1,6 +1,6 @@
 ---
 name: bri-video-srt
-description: 面向中文口播的两阶段「粗剪 → 人工精剪 → 最终 SRT」工作流。用户提供原始口播并说「粗剪一下」时，进入阶段 A：按对标节奏删长气口、识别高置信度重复口播，交付粗剪视频、同步的审核 SRT 与剪辑时间记录；用户提供剪映等软件人工精剪、时间轴已锁定的 MP4/音频并说「生成字幕」时，直接进入阶段 B：使用本地 whisper-cli（large-v3-turbo）重转写、术语校准、语义断句、真实音频重锚定和中文排版，交付唯一可导入剪辑软件的最终 SRT。默认不烧录字幕、不渲染硬字幕。用户说「校准字幕」「修正字幕错别字」「调整字幕断句」并提供 SRT 时也使用。未剪口播只说“配字幕”时，先确认要粗剪还是已完成精剪。
+description: 面向中文口播和屏幕实操的两阶段「粗剪 → 人工精剪 → 最终 SRT」工作流。用户提供原始口播并说「粗剪一下」时，进入阶段 A：先联合画面与语义保护网页操作、输入、切换和模型等待，再按节奏删普通气口、识别高置信度重复口播，交付粗剪视频、同步审核 SRT 与剪辑记录；用户提供人工精剪、时间轴已锁定的 MP4/音频并说「生成字幕」时，直接进入阶段 B：使用本地 whisper-cli（large-v3-turbo）重转写、术语校准、语义断句、真实音频重锚定和中文排版，交付唯一可导入剪辑软件的最终 SRT。默认不烧录字幕、不渲染硬字幕。用户说「校准字幕」「修正字幕错别字」「调整字幕断句」并提供 SRT 时也使用。未剪口播只说“配字幕”时，先确认要粗剪还是已完成精剪。
 ---
 
 # bri-video-srt：粗剪与最终字幕
@@ -74,10 +74,40 @@ auto-editor "<原始视频>" --edit "audio:threshold=4%" --margin 0sec \
   --export v1 -o "<临时目录>/<basename>.auto-editor.json"
 ```
 
-- 正文相邻句的长静音最多保留 `1.05` 秒；片头留 `0.17` 秒，片尾留 `0.37` 秒。用户觉得节奏太紧或太松时，只调整这三个留白参数，不调整 auto-editor 的 `margin`。
+- 纯口播或已经确认是普通口播停顿的相邻句长静音最多保留 `1.05` 秒；片头留 `0.17` 秒，片尾留 `0.37` 秒。实操演示中的操作型停顿不受此上限约束。用户觉得口播节奏太紧或太松时，只调整这三个留白参数，不调整 auto-editor 的 `margin`。
 - A2 只生成原始声音 cutlist。实际 4K 导出移到 A3 的预检门禁之后，并且整次粗剪只能执行一次。
 
-### A3. 高置信度重复口播与导出前门禁
+### A3. 操作型停顿、重复口播与导出前门禁
+
+如果原片包含网页、软件、大模型或课程实操演示，不能把“没有说话”直接等同于“无用气口”。先对不少于 `1.5` 秒的候选静音做画面—语义联合审计：
+
+```bash
+python3 "<SKILL_DIR>/scripts/pause_visual_audit.py" prepare \
+  --media "<原始视频>" \
+  --auto-json "<临时目录>/<basename>.auto-editor.json" \
+  --srt "<临时目录>/<basename>.rough.srt" \
+  --report "<临时目录>/<basename>.pause-audit.json" \
+  --sheet-dir "<临时目录>/<basename>.pause-sheets"
+```
+
+- 必须打开全部联系表。每个候选按开始、中间、结束三帧排列，并结合报告里的前后口播判断。
+- 分类只能使用：`operation`、`wait_generation`、`page_switch`、`typing_or_input`、`quiet_speech`、`ordinary_speech_pause`、`retake_context`、`uncertain`，每一项都要填写具体 `reason`。
+- 页面结构变化、输入框文字增长、按钮/验证码状态变化、结果逐步生成或滚动，以及“打开、粘贴、发送、等待、来看结果”等操作叙事，都属于视觉上有意义的时间，完整保留。
+- auto-editor 的“低于 4%”不等于真正无声。报告会结合 `-35dB` 静音覆盖率和落在候选内部的 ASR 句段中点；出现 `possible_quiet_speech: true` 时，必须标为 `quiet_speech`、`retake_context` 或其他保护类型，不能标成普通静音。
+- `ordinary_speech_pause` 才交给默认规则压缩到最多 `1.05` 秒。`retake_context` 本身也完整保留，只说明这里需要继续做重复口播审计；只有后续左右语义锚点门禁确认重说后，才能删除前一次口播。
+- 证据不足时标为 `uncertain` 并完整保留；宁可让用户人工精剪，也不要制造网页瞬移、输入内容突变或模型回答凭空出现。
+
+按 `references/pause-audit-decisions.example.json` 另存逐项判断，再应用保护区间：
+
+```bash
+python3 "<SKILL_DIR>/scripts/pause_visual_audit.py" apply \
+  --auto-json "<临时目录>/<basename>.auto-editor.json" \
+  --report "<临时目录>/<basename>.pause-audit.json" \
+  --decisions "<临时目录>/<basename>.pause-decisions.json" \
+  --output-json "<临时目录>/<basename>.operation-protected.json"
+```
+
+`apply` 必须显示 `audit_pass: true`。任一候选未分类或没有理由都会失败并禁止 4K 导出。纯人物口播、没有任何屏幕操作时可跳过本门禁；一旦出现实操演示就必须执行。
 
 - 对照 A1 的原始 SRT、音频和长停顿，寻找“前一次没说好 → 停顿 → 完整重说”的紧邻重复。文本相似且音频语义明确重复才可剪；疑似重复、课程录屏或已剪成片一律保留。
 - 不能直接把 Whisper 句段起止当作剪切边界。Whisper 时间戳只提供 `discard_start` / `retain_hint` 的语义提示；保留句开头必须由附近真实长静音末端支持。
@@ -96,7 +126,7 @@ python3 "<SKILL_DIR>/scripts/roughcut_preflight.py" prepare \
   --media "<原始视频>" \
   --wav "<临时目录>/<basename>.wav" \
   --candidates "<临时目录>/<basename>.repeat-candidates.json" \
-  --auto-json "<临时目录>/<basename>.auto-editor.json" \
+  --auto-json "<临时目录>/<basename>.operation-protected.json" \
   --combined-json "<临时目录>/<basename>.combined.json" \
   --preview-wav "<临时目录>/<basename>.cut-preview.wav" \
   --report "<临时目录>/<basename>.preflight.json"
@@ -111,7 +141,7 @@ python3 "<SKILL_DIR>/scripts/roughcut_preflight.py" validate \
 ```
 
 - `validate` 必须 N/N 通过。任何 `left_ok` / `right_ok` 失败都禁止 4K 导出；先增加上下文、修正 ASR 锚点变体或重新判断候选，再重跑几秒钟的音频门禁。
-- 如果没有任何高置信度重复候选，跳过预览门禁，直接把 auto-editor JSON 作为 `combined.json`；不要为了满足流程虚构候选。这种情况运行 `autocut.py` 时不传 `--preflight-report`。
+- 如果没有任何高置信度重复候选，跳过重复口播预览门禁：实操素材把已经通过画面审计的 `operation-protected.json` 作为 `combined.json`，纯人物口播才直接使用 auto-editor JSON；不要为了满足流程虚构候选。这种情况运行 `autocut.py` 时不传 `--preflight-report`，但实操素材仍必须传 `--pause-audit-report`。
 - 门禁通过后才执行本次粗剪唯一一次 4K 导出：
 
 ```bash
@@ -120,10 +150,14 @@ python3 "<SKILL_DIR>/scripts/autocut.py" \
   "<审核目录>/<basename>.rough-cut.mp4" \
   --max-pause 1.05 --head-pad 0.17 --tail-pad 0.37 \
   --report "<审核目录>/<basename>.rough-cut.cutlist.json" \
-  --preflight-report "<临时目录>/<basename>.preflight.json"
+  --preflight-report "<临时目录>/<basename>.preflight.json" \
+  --pause-audit-report "<临时目录>/<basename>.pause-audit.json"
 ```
 
+纯人物口播按前述规则跳过画面审计时，同时省略 `--pause-audit-report`；实操演示不得省略。
+
 - 不能只删 SRT 文字：每一段实际删除范围都要写入源视频时间戳和剪辑清单。把已验证的重复范围写入 `manual_repeat_ranges_seconds`。
+- 实操演示的 cutlist 还必须写入 `protected_operation_ranges_seconds` 和 `pause_visual_audit_pass: true`，让人工复核能区分“主动保留的操作时间”和“普通气口”。
 - `autocut.py` 用预计成片时长而不是原片时长计算进度；ffmpeg 收尾的 `out_time_ms=N/A` 必须安全忽略，并只在进程成功退出后显示 100%。因此进度解析异常不能再阻止已经成功的编码写出 cutlist。
 - `autocut.py` 必须把每个切点统一量化到源视频帧边界，使用同一边界逐段成对裁切视频和音频，再用 `concat` 拼接。禁止用 `select` / `aselect` 独立筛流并分别重建时间轴；视频帧与音频帧取整粒度不同，切点越多口型漂移会越大。
 - 记录抽轨、分析/转写、预检、4K 导出和成片复检的墙钟时间。向用户报告真实百分比时应使用可观测的 ffmpeg 进度；拿不到精确进度就明确说是估算。

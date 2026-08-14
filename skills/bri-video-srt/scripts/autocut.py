@@ -38,6 +38,10 @@ def parse_args(argv=None):
         help="可选：roughcut_preflight.py 产生且已 N/N 通过的报告；把重复区间写入最终 cutlist",
     )
     parser.add_argument(
+        "--pause-audit-report",
+        help="可选：pause_visual_audit.py 已完成分类的报告；把受保护操作停顿写入最终 cutlist",
+    )
+    parser.add_argument(
         "--max-pause", type=float, default=1.05,
         help="长静音剪短后保留的最大句间停顿秒数（默认：1.05）",
     )
@@ -94,6 +98,32 @@ def progress_percent(seconds, expected_duration):
     return min(99, max(0, int(seconds / expected_duration * 100)))
 
 
+def verify_protected_ranges(payload, fps, pause_audit):
+    """确认审计为保护的每一帧在最终输入 cutlist 中仍是保留状态。"""
+    failures = []
+    if payload.get("chunks") is not None:
+        keep_chunks = [
+            (int(start), int(end)) for start, end, speed in payload.get("chunks", [])
+            if float(speed) == 1.0
+        ]
+    else:
+        keep_chunks = [
+            (round(float(item["start"]) * fps), round(float(item["end"]) * fps))
+            for item in payload.get("kept_ranges_seconds", [])
+        ]
+    for item in pause_audit.get("protected_ranges", []):
+        start = round(float(item["start"]) * fps)
+        end = round(float(item["end"]) * fps)
+        covered = sum(max(0, min(end, right) - max(start, left))
+                      for left, right in keep_chunks)
+        if covered < end - start:
+            failures.append(item.get("id", f"{item['start']}-{item['end']}"))
+    if failures:
+        raise SystemExit(
+            "受保护操作区间未完整写入最终 cutlist：" + ", ".join(failures)
+        )
+
+
 def quantize_keep_ranges(keep, fps):
     """把切点统一到视频帧边界，并生成精确的输出时间轴。"""
     ranges = []
@@ -144,7 +174,8 @@ def build_paired_concat_filter(ranges):
 
 
 def write_cutlist_report(path, src, dst, duration, args, ranges, preflight,
-                         requested_duration=None, previous_report=None):
+                         requested_duration=None, previous_report=None,
+                         pause_audit=None):
     keep = [(item["source_start"], item["source_end"]) for item in ranges]
     removed_ranges = []
     cursor = 0.0
@@ -202,6 +233,16 @@ def write_cutlist_report(path, src, dst, duration, args, ranges, preflight,
         } for item in ranges],
         "removed_ranges_seconds": removed_ranges,
         "manual_repeat_ranges_seconds": manual_repeats,
+        "protected_operation_ranges_seconds": (
+            pause_audit.get("protected_ranges", []) if pause_audit
+            else previous_report.get("protected_operation_ranges_seconds", [])
+            if previous_report else []
+        ),
+        "pause_visual_audit_pass": (
+            pause_audit.get("audit_pass") if pause_audit
+            else previous_report.get("pause_visual_audit_pass")
+            if previous_report else None
+        ),
         "preflight_pass": (
             preflight.get("preflight_pass") if preflight
             else previous_report.get("preflight_pass") if previous_report else None
@@ -220,6 +261,12 @@ def main(argv=None):
         if preflight.get("preflight_pass") is not True:
             raise SystemExit("预检报告未 N/N 通过，禁止启动 4K 导出")
 
+    pause_audit = None
+    if args.pause_audit_report:
+        pause_audit = json.loads(Path(args.pause_audit_report).read_text(encoding="utf-8"))
+        if pause_audit.get("audit_pass") is not True:
+            raise SystemExit("操作型停顿审计未完成，禁止启动 4K 导出")
+
     probe_data = json.loads(subprocess.check_output([
         "ffprobe", "-v", "error", "-select_streams", "v:0",
         "-show_entries", "stream=r_frame_rate,pix_fmt,color_space,color_primaries,color_transfer",
@@ -231,6 +278,8 @@ def main(argv=None):
     fps = num / den
 
     cutlist_payload = json.loads(Path(cutlist_path).read_text(encoding="utf-8"))
+    if pause_audit:
+        verify_protected_ranges(cutlist_payload, fps, pause_audit)
     previous_report = cutlist_payload if args.reuse_report else None
     if args.reuse_report:
         raw_keep = [
@@ -294,6 +343,7 @@ def main(argv=None):
         write_cutlist_report(
             args.report, src, dst, duration, args, ranges, preflight,
             requested_duration=requested_duration, previous_report=previous_report,
+            pause_audit=pause_audit,
         )
     print(
         f"完成：保留 {len(keep)} 段，删去 {removed:.1f} 秒气口；"

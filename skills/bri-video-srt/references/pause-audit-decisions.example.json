@@ -1,0 +1,14 @@
+{
+  "decisions": [
+    {
+      "id": "pause_001",
+      "classification": "wait_generation",
+      "reason": "发送提示词后结果区从空白逐步出现文字，属于模型生成过程"
+    },
+    {
+      "id": "pause_002",
+      "classification": "ordinary_speech_pause",
+      "reason": "课件和光标均静止，前后是同一段正常口播，没有操作或重说证据"
+    }
+  ]
+}
