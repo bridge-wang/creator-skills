@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.0 — 2026-08-14
+
+- 为实操型受保护空白增加 `7.0` 秒软上限：不超过 7 秒完整保留，超过时保留首尾各 3.5 秒并裁掉中间，同时保住“发起操作”和“结果出现”。
+- `possible_quiet_speech: true` 的候选绕过 7 秒上限，继续完整保留，避免把低声口播误当空白删除。
+- 停顿审计报告新增每个受保护候选的实际保留范围、保留时长、`capped_to_seconds` 和汇总字段 `capped_protected_count`；4K 导出门禁按实际保留范围验证。
+- 新增长操作空白均衡裁切、低声口播豁免、实际保留范围门禁等回归测试；完整测试增至 35 项。
+- README 更新为当前两阶段工作流，并补充普通口播气口与实操型空白的不同规则。
+
 ## 1.5.0 — 2026-08-14
 
 - 新增 `pause_visual_audit.py`：在实操演示粗剪前，把长静音按开始/中间/结束三帧和前后口播联合审计，区分操作、输入、页面切换、等待生成、普通口播停顿与疑似重说。
@@ -47,14 +55,15 @@
 - v1.4.0 标签：`bri-video-srt-v1.4.0`
 - v1.4.1 标签：`bri-video-srt-v1.4.1`
 - v1.5.0 标签：`bri-video-srt-v1.5.0`
+- v1.6.0 标签：`bri-video-srt-v1.6.0`
 
 需要回退时优先使用 `git revert` 撤销对应版本提交，避免改写仓库历史。不要用 `git reset --hard`。
 
 ```bash
 # 先查看两个版本间只属于该 skill 的变化
-git diff bri-video-srt-v1.4.1..bri-video-srt-v1.5.0 -- \
+git diff bri-video-srt-v1.5.0..bri-video-srt-v1.6.0 -- \
   skills/bri-video-srt .claude-plugin/marketplace.json
 
-# 在保留历史的前提下撤销 v1.5.0
-git revert bri-video-srt-v1.5.0
+# 在保留历史的前提下撤销 v1.6.0
+git revert bri-video-srt-v1.6.0
 ```

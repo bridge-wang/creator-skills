@@ -40,6 +40,18 @@ class AutocutTests(unittest.TestCase):
         reused_report = {"kept_ranges_seconds": [{"start": 0, "end": 4}]}
         MODULE.verify_protected_ranges(reused_report, 60, audit)
 
+    def test_capped_protected_range_only_requires_recorded_edges(self):
+        payload = {"chunks": [
+            [0, 270, 1.0], [270, 1050, 99999.0], [1050, 1320, 1.0],
+        ]}
+        audit = {"protected_ranges": [{
+            "id": "wait", "start": 1, "end": 21,
+            "retained_ranges_seconds": [
+                {"start": 1, "end": 4.5}, {"start": 17.5, "end": 21},
+            ],
+        }]}
+        MODULE.verify_protected_ranges(payload, 60, audit)
+
     def test_progress_uses_expected_output_duration(self):
         seconds = MODULE.parse_progress_seconds("out_time_ms", "281000000")
         self.assertEqual(MODULE.progress_percent(seconds, 562), 50)

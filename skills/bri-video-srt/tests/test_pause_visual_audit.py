@@ -25,7 +25,7 @@ class PauseVisualAuditTests(unittest.TestCase):
         payload = {"chunks": [[0, 60, 1.0], [60, 120, 99999.0], [120, 180, 1.0]]}
         self.assertEqual(MODULE.build_candidates(payload, 60, [], 1.5), [])
 
-    def test_protected_pause_is_restored_and_ordinary_pause_stays_cut(self):
+    def test_short_protected_pause_is_restored_and_ordinary_pause_stays_cut(self):
         payload = {"chunks": [
             [0, 60, 1.0], [60, 180, 99999.0], [180, 240, 1.0],
             [240, 360, 99999.0], [360, 420, 1.0],
@@ -36,6 +36,28 @@ class PauseVisualAuditTests(unittest.TestCase):
         ]
         result = MODULE.apply_protected_ranges(payload, 60, candidates)
         self.assertEqual(result["chunks"], [[0, 240, 1.0], [240, 360, 99999.0], [360, 420, 1.0]])
+
+    def test_long_protected_blank_keeps_balanced_seven_seconds(self):
+        payload = {"chunks": [[0, 60, 1.0], [60, 1260, 99999.0], [1260, 1320, 1.0]]}
+        candidates = [{
+            "start": 1, "end": 21, "duration": 20,
+            "classification": "wait_generation", "possible_quiet_speech": False,
+        }]
+        result = MODULE.apply_protected_ranges(payload, 60, candidates)
+        self.assertEqual(result["chunks"], [
+            [0, 270, 1.0], [270, 1050, 99999.0], [1050, 1320, 1.0],
+        ])
+        retained = MODULE.protected_retention_frames(candidates[0], 60, 7.0)
+        self.assertEqual(retained, [(60, 270), (1050, 1260)])
+
+    def test_possible_quiet_speech_bypasses_seven_second_cap(self):
+        candidate = {
+            "start": 1, "end": 21, "duration": 20,
+            "classification": "retake_context", "possible_quiet_speech": True,
+        }
+        self.assertEqual(
+            MODULE.protected_retention_frames(candidate, 60, 7.0), [(60, 1260)]
+        )
 
     def test_uncertain_defaults_to_protect(self):
         self.assertIn("uncertain", MODULE.PROTECTED_CLASSES)

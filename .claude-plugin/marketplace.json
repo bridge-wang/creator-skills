@@ -5,7 +5,7 @@
   },
   "metadata": {
     "description": "Bridge 的创作者工具箱 — 自媒体创作流程中沉淀下来的 Skills，持续增加中",
-    "version": "1.5.0"
+    "version": "1.6.0"
   },
   "plugins": [
     {
@@ -13,7 +13,7 @@
       "description": "中文口播两阶段工作流：粗剪前联合审计画面和语义，保护网页操作、输入、切换与模型等待，再验证重复口播切点并同步裁切音画；人工精剪锁定时间轴后，用本地 whisper.cpp 生成最终 SRT。",
       "source": "./",
       "strict": false,
-      "version": "1.5.0",
+      "version": "1.6.0",
       "category": "video-subtitles",
       "keywords": [
         "video",

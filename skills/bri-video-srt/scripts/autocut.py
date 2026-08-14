@@ -99,7 +99,7 @@ def progress_percent(seconds, expected_duration):
 
 
 def verify_protected_ranges(payload, fps, pause_audit):
-    """确认审计为保护的每一帧在最终输入 cutlist 中仍是保留状态。"""
+    """确认审计要求保留的帧在最终输入 cutlist 中仍是保留状态。"""
     failures = []
     if payload.get("chunks") is not None:
         keep_chunks = [
@@ -112,12 +112,17 @@ def verify_protected_ranges(payload, fps, pause_audit):
             for item in payload.get("kept_ranges_seconds", [])
         ]
     for item in pause_audit.get("protected_ranges", []):
-        start = round(float(item["start"]) * fps)
-        end = round(float(item["end"]) * fps)
-        covered = sum(max(0, min(end, right) - max(start, left))
-                      for left, right in keep_chunks)
-        if covered < end - start:
-            failures.append(item.get("id", f"{item['start']}-{item['end']}"))
+        required = item.get("retained_ranges_seconds") or [{
+            "start": item["start"], "end": item["end"],
+        }]
+        for retained in required:
+            start = round(float(retained["start"]) * fps)
+            end = round(float(retained["end"]) * fps)
+            covered = sum(max(0, min(end, right) - max(start, left))
+                          for left, right in keep_chunks)
+            if covered < end - start:
+                failures.append(item.get("id", f"{item['start']}-{item['end']}"))
+                break
     if failures:
         raise SystemExit(
             "受保护操作区间未完整写入最终 cutlist：" + ", ".join(failures)

@@ -92,9 +92,9 @@ python3 "<SKILL_DIR>/scripts/pause_visual_audit.py" prepare \
 
 - 必须打开全部联系表。每个候选按开始、中间、结束三帧排列，并结合报告里的前后口播判断。
 - 分类只能使用：`operation`、`wait_generation`、`page_switch`、`typing_or_input`、`quiet_speech`、`ordinary_speech_pause`、`retake_context`、`uncertain`，每一项都要填写具体 `reason`。
-- 页面结构变化、输入框文字增长、按钮/验证码状态变化、结果逐步生成或滚动，以及“打开、粘贴、发送、等待、来看结果”等操作叙事，都属于视觉上有意义的时间，完整保留。
+- 页面结构变化、输入框文字增长、按钮/验证码状态变化、结果逐步生成或滚动，以及“打开、粘贴、发送、等待、来看结果”等操作叙事，都属于视觉上有意义的时间。确认是空白且不超过 `7.0` 秒时完整保留；超过 `7.0` 秒时统一保留首尾各 `3.5` 秒、裁掉中间，交给用户精剪时重点复核。这样同时保住“发起操作”和“结果出现”。
 - auto-editor 的“低于 4%”不等于真正无声。报告会结合 `-35dB` 静音覆盖率和落在候选内部的 ASR 句段中点；出现 `possible_quiet_speech: true` 时，必须标为 `quiet_speech`、`retake_context` 或其他保护类型，不能标成普通静音。
-- `ordinary_speech_pause` 才交给默认规则压缩到最多 `1.05` 秒。`retake_context` 本身也完整保留，只说明这里需要继续做重复口播审计；只有后续左右语义锚点门禁确认重说后，才能删除前一次口播。
+- `ordinary_speech_pause` 才交给默认规则压缩到最多 `1.05` 秒。受保护分类执行上述 `7.0` 秒上限，但 `possible_quiet_speech: true` 时禁止执行该上限并完整保留。`retake_context` 只说明这里需要继续做重复口播审计；只有后续左右语义锚点门禁确认重说后，才能删除前一次口播。
 - 证据不足时标为 `uncertain` 并完整保留；宁可让用户人工精剪，也不要制造网页瞬移、输入内容突变或模型回答凭空出现。
 
 按 `references/pause-audit-decisions.example.json` 另存逐项判断，再应用保护区间：
@@ -104,10 +104,11 @@ python3 "<SKILL_DIR>/scripts/pause_visual_audit.py" apply \
   --auto-json "<临时目录>/<basename>.auto-editor.json" \
   --report "<临时目录>/<basename>.pause-audit.json" \
   --decisions "<临时目录>/<basename>.pause-decisions.json" \
-  --output-json "<临时目录>/<basename>.operation-protected.json"
+  --output-json "<临时目录>/<basename>.operation-protected.json" \
+  --max-protected-pause 7.0
 ```
 
-`apply` 必须显示 `audit_pass: true`。任一候选未分类或没有理由都会失败并禁止 4K 导出。纯人物口播、没有任何屏幕操作时可跳过本门禁；一旦出现实操演示就必须执行。
+`apply` 必须显示 `audit_pass: true`，并在报告中记录 `capped_protected_count`、每段实际保留范围和 `capped_to_seconds`。任一候选未分类或没有理由都会失败并禁止 4K 导出。纯人物口播、没有任何屏幕操作时可跳过本门禁；一旦出现实操演示就必须执行。
 
 - 对照 A1 的原始 SRT、音频和长停顿，寻找“前一次没说好 → 停顿 → 完整重说”的紧邻重复。文本相似且音频语义明确重复才可剪；疑似重复、课程录屏或已剪成片一律保留。
 - 不能直接把 Whisper 句段起止当作剪切边界。Whisper 时间戳只提供 `discard_start` / `retain_hint` 的语义提示；保留句开头必须由附近真实长静音末端支持。
