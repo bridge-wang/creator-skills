@@ -72,6 +72,9 @@ class AutocutTests(unittest.TestCase):
     def test_progress_reaches_99_only_until_process_exit(self):
         self.assertEqual(MODULE.progress_percent(600, 562), 99)
 
+    def test_mux_duration_is_limited_to_expected_last_frame(self):
+        self.assertEqual(MODULE.mux_duration_args(724.65), ["-t", "724.650000000"])
+
     def test_report_records_expected_output_duration(self):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "cutlist.json"

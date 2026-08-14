@@ -98,6 +98,11 @@ def progress_percent(seconds, expected_duration):
     return min(99, max(0, int(seconds / expected_duration * 100)))
 
 
+def mux_duration_args(expected_duration):
+    """把容器截止时间锁到最后一帧，避免 AAC 尾包造成首尾差超限。"""
+    return ["-t", f"{expected_duration:.9f}"]
+
+
 def subtract_intervals(interval, removed):
     """从一个半开区间中扣除已经通过门禁的删除区间。"""
     segments = [interval]
@@ -354,6 +359,7 @@ def main(argv=None):
         "-color_trc", probe.get("color_transfer", "bt709"),
         "-c:a", "aac", "-b:a", "192k", dst,
     ]
+    cmd[-1:-1] = mux_duration_args(expected_duration)
     with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as process:
         last_percent = -1
         for line in process.stdout:
