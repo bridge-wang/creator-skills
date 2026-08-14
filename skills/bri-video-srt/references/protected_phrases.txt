@@ -1,5 +1,7 @@
 # Phrases here should not be split across subtitle boundaries.
 # Add one phrase per line.
+# This file is part of the skill's error log (see calibration.md workflow step 8):
+# every real recognition/split mistake gets written back here so it is caught automatically next time.
 ChatGPT
 Codex
 Claude

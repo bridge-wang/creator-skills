@@ -70,6 +70,8 @@ python3 "<SKILL_DIR>/scripts/srt_calibrate.py" lint \
   "/path/to/input.calibrated.srt"
 ```
 
+8. 错题回收（错题集闭环，收尾前必做，不可省略）：本轮校准中如果亲手改过某个识别错误，但它当时不在 `fixed_terms.tsv`（术语/别名）或 `protected_phrases.txt`（不可拆分短语）里，视为发现新错例。收尾前必须把它写回对应文件（`fixed_terms.tsv` 格式见文件头注释；是否需要 `contextual` 语境限定参考已有条目），然后重跑一次 `lint`，确认新条目已被 `find_unresolved_aliases` 之类的检查覆盖。只在正文里手动改一次、不写回词表，视为本步骤未完成。这两个文件是本 skill 唯一的错题集：下次同样的错例会被自动拦下，不必再靠人工记忆。
+
 Return the output path and briefly mention important categories of edits. Do not paste the full subtitle unless the user asks.
 
 ## Calibration Rules
@@ -81,7 +83,7 @@ Fixed spellings:
 - Apply `always` rules directly when the alias is clearly the same term.
 - Apply `contextual` rules only when the surrounding cues make the meaning clear. For example, change `cloud` to `Claude` in an LLM/model/Anthropic/code-assistant context, but leave it alone when the speaker means cloud computing or the cloud.
 - If a name is ambiguous and not in the fixed list, prefer leaving it unchanged and mention the uncertainty.
-- 词表是给使用者自己维护的：转录里反复出现你领域的专名误识别时，把它加进 `fixed_terms.tsv`（格式见文件头注释），下次自动生效。
+- 词表会持续增长：转录里出现新的专名/术语误识别时，不是"这次顺手改对就行"，而是必须按 Workflow 第 8 步写回 `fixed_terms.tsv`（格式见文件头注释），下次自动生效。
 
 Timing integrity:
 - If a manual edit only corrects words inside a cue, `replace_text` is safe.
