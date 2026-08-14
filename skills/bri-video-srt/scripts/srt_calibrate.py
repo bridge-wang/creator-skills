@@ -794,14 +794,17 @@ def cmd_auto(args: argparse.Namespace) -> int:
     punctuated = punctuate_parallel_terms(cues)
     semantic_repaired = 0
     repaired = 0
-    if not args.no_boundary_repair:
+    # Preserve Whisper's timestamp anchors by default. Proportional boundary
+    # rewrites are useful only after audio review; otherwise they can make a
+    # subtitle appear before or after the matching speech.
+    if not args.no_boundary_repair and not args.preserve_timing:
         semantic_repaired = repair_semantic_boundaries(cues, args.max_chars)
         repaired = repair_protected_boundaries(cues, phrases)
     merged = 0
     split_count = 0
-    if not args.no_merge:
+    if not args.no_merge and not args.preserve_timing:
         cues, merged = merge_continuations(cues, args.max_chars * 2)
-    if not args.no_split:
+    if not args.no_split and not args.preserve_timing:
         cues, split_count = split_long_cues(cues, args.max_chars, phrases)
     write_srt(cues, output_path)
     print(f"wrote {output_path}")
@@ -878,6 +881,12 @@ def build_parser() -> argparse.ArgumentParser:
     auto.add_argument("--terms", default=str(DEFAULT_TERMS))
     auto.add_argument("--phrases", default=str(DEFAULT_PHRASES))
     auto.add_argument("--max-chars", type=int, default=DEFAULT_MAX_DISPLAY_CHARS)
+    auto.add_argument(
+        "--preserve-timing",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="preserve Whisper segment boundaries (default); disable only after audio review",
+    )
     auto.add_argument("--no-merge", action="store_true")
     auto.add_argument("--no-split", action="store_true")
     auto.add_argument("--no-boundary-repair", action="store_true")

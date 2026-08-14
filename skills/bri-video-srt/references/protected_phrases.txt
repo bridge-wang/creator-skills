@@ -4,10 +4,15 @@ ChatGPT
 Codex
 Claude
 Claude Code
+WorkBuddy
 harness engineering
 OpenAI
 Anthropic
 DeepSeek
+Kimi
+Coze
+Chatbot
+Opus
 Perplexity
 Midjourney
 Stable Diffusion

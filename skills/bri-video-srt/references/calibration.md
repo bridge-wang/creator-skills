@@ -1,26 +1,28 @@
 # SRT 校准流程与规则
 
-本文档是 bri-video-srt 第 4 步「校准」的完整执行手册。目标：在源文件旁产出修正后的 `<basename>.calibrated.srt`，保留讲话者的意思和口语节奏，只修复明显的识别错误、断句问题和时间边界。
+本文档是 bri-video-srt 阶段 B2「校准」的完整执行手册。目标：在会话临时目录产出语义与术语已修正的 `<basename>.draft.srt`。如果有同时间轴的最终媒体，B3 会再用真实音频把它重锚定为媒体目录中唯一交付的 `<basename>.srt`；不要把 Whisper 的句段时间直接当成最终逐句时间。
 
 本文档中 `<SKILL_DIR>` 指 bri-video-srt skill 所在目录（即 SKILL.md 所在的目录）。
 
 ## Workflow
 
-1. Confirm the input is a `.srt` file path. Save output beside the source as `<basename>.calibrated.srt` unless the user requests another path.
+1. Confirm the input is a `.srt` file path. 对最终媒体流程，先保存为 `<basename>.draft.srt`；只有用户只提供 SRT、没有可对齐媒体时，才直接保存为 `<basename>.calibrated.srt`。
 2. Read `<SKILL_DIR>/references/fixed_terms.tsv` before editing. Treat it as the user-maintained canonical spelling list. Read `<SKILL_DIR>/references/protected_phrases.txt` when boundary repair depends on phrases that must not be split.
 3. Run the helper script for a first pass:
 
 ```bash
 python3 "<SKILL_DIR>/scripts/srt_calibrate.py" auto \
   "/path/to/input.srt" \
-  --output "/path/to/input.calibrated.srt"
+  --output "/path/to/input.draft.srt"
 ```
 
-4. Review the output in context. The script is conservative but not a replacement for semantic judgment. Use `preview` to inspect neighboring cues:
+   The default preserves Whisper cue boundaries. It must not automatically merge or split cues, or proportionally move a boundary merely to satisfy a display-length budget. Make semantic merges only after review with explicit operations. Use `--no-preserve-timing` only after reviewing the audio around every boundary that will move.
+
+4. Review the draft in context. The script is conservative but not a replacement for semantic judgment. Use `preview` to inspect neighboring cues:
 
 ```bash
 python3 "<SKILL_DIR>/scripts/srt_calibrate.py" preview \
-  "/path/to/input.calibrated.srt" --start 35 --end 50
+  "/path/to/input.draft.srt" --start 35 --end 50
 ```
 
 5. Do a language-continuity pass before delivery. `lint` catches timing, length, protected phrases, and known semantic-boundary patterns, but it cannot judge every Chinese phrase. Specifically inspect cues where a modifier, idiom, quantifier phrase, time phrase, or prepositional phrase is split across two subtitles.
@@ -57,11 +59,11 @@ python3 "<SKILL_DIR>/scripts/srt_calibrate.py" preview \
 
 ```bash
 python3 "<SKILL_DIR>/scripts/srt_calibrate.py" apply \
-  "/path/to/input.calibrated.srt" "/path/to/ops.json" \
-  --output "/path/to/input.calibrated.srt"
+  "/path/to/input.draft.srt" "/path/to/ops.json" \
+  --output "/path/to/input.draft.srt"
 ```
 
-7. Validate before delivery:
+7. 对有最终媒体的流程，随后运行 `scripts/srt_audio_reanchor.py <media> <temp>/<basename>.draft.srt <media-dir>/<basename>.srt`，再对最终 `.srt` 执行 `lint`；只有 SRT 输入才直接对校准文件执行 `lint`：
 
 ```bash
 python3 "<SKILL_DIR>/scripts/srt_calibrate.py" lint \
@@ -84,7 +86,7 @@ Fixed spellings:
 Timing integrity:
 - If a manual edit only corrects words inside a cue, `replace_text` is safe.
 - If a manual edit moves any word across a cue boundary, changes two cues into three cues, three cues into two cues, or otherwise changes segmentation across adjacent cues, do not use isolated `replace_text` operations. Use `repartition_pair`, `split`, or `repartition_span` over the entire affected contiguous time span so the new cue starts and ends are recalculated together.
-- Preserve the combined start time of the first affected cue and the combined end time of the last affected cue. Assign internal boundaries from audio, a user-provided reference, or proportional text weights. If the user provides a manually calibrated screenshot or timestamp reference with an absolute offset, use its relative cue lengths and gaps, then map those boundaries into the target file's time span.
+- Preserve the combined start time of the first affected cue and the combined end time of the last affected cue. Prefer an audible pause or a user-provided reference for internal boundaries. Proportional text weights are only a provisional fallback; when final media exists, the mandatory audio re-anchor pass will repair boundaries that fall in verified silence, but it cannot promise word-level timing in continuous speech.
 - After any segmentation edit, run `preview` on the affected range and compare against the original neighboring cues. Watch specifically for words that were moved before or after an existing timestamp boundary; those words require the boundary to move with them.
 - Manual `boundary_ms` and `boundary_ms_list` values must be strictly inside the affected cue span and in increasing order. If they fall outside that span, re-check cue ids before applying.
 

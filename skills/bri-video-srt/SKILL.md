@@ -1,120 +1,295 @@
 ---
 name: bri-video-srt
-description: 一句指令完成「视频/音频 → 成品 SRT 字幕」全流程：（口播原始素材先自动删气口，色彩无损）→ ffmpeg 抽音轨 → 本地 whisper-cli（large-v3-turbo）转录出原始 SRT → 自动校准错别字、断句与时间戳 → 按「中文文案排版指北」规范排版（中英文之间、中文与数字之间加空格等），产出可直接导入剪辑软件的最终字幕文件。当用户提供视频或音频文件路径并说「出字幕」「提取字幕」「生成字幕」「转录成 SRT」「做一份字幕文件」「给这个视频配字幕」「删气口」「剪气口」，或输入 /bri-video-srt <文件路径> 时使用；用户提供现成的 .srt 文件并说「校准字幕」「修正字幕错别字」「调整字幕断句」时也用本 skill（直接进入校准环节）。即使用户没提 Whisper、SRT 或任何工具名，只要意图是得到一份可直接使用的字幕文件，就用本 skill，不要只做转录而跳过校准环节。
+description: 面向中文口播和屏幕实操的两阶段「粗剪 → 人工精剪 → 最终 SRT」工作流。用户提供原始口播并说「粗剪一下」时，进入阶段 A：先联合画面与语义保护网页操作、输入、切换和模型等待，再按节奏删普通气口、识别高置信度重复口播，交付粗剪视频、同步审核 SRT 与剪辑记录；用户提供人工精剪、时间轴已锁定的 MP4/音频并说「生成字幕」时，直接进入阶段 B：使用本地 whisper-cli（large-v3-turbo）重转写、术语校准、语义断句、真实音频重锚定和中文排版，交付唯一可导入剪辑软件的最终 SRT。默认不烧录字幕、不渲染硬字幕。用户说「校准字幕」「修正字幕错别字」「调整字幕断句」并提供 SRT 时也使用。未剪口播只说“配字幕”时，先确认要粗剪还是已完成精剪。
 ---
 
-# bri-video-srt：视频一键出成品字幕
+# bri-video-srt：粗剪与最终字幕
 
-把一个视频（或音频）文件变成两份 SRT：原始转录版 + 校准成品版。成品版是交付物，可直接导入剪辑软件。口播原始素材还会先自动删气口，产出一份剪好的视频，SRT 与它时间轴对齐。
+这个 skill 不把“粗剪”和“最终字幕”混成一次不可逆操作。机器擅长先删明显气口、找候选重复；人负责判断节奏与误剪；只有人工精剪锁定时间轴后，才生成最终字幕。这样不必在会被剪映再次改变的时间轴上做两遍字幕润色。
 
-**转录完全在本地进行（whisper.cpp），不上传音视频到任何云端。**
+**默认不烧录、不渲染、不重编码已精剪的成片。** 转录完全在本地进行（whisper.cpp），不上传音视频。
 
-本文档中 `<SKILL_DIR>` 指本 skill 所在目录（即本 SKILL.md 所在的目录）。
+本文档中 `<SKILL_DIR>` 指本 skill 所在目录。
 
-## 流程
+## 先判断所处阶段
 
-### 第 0 步：确认环境和输入
+| 输入状态 | 进入阶段 | 交付 |
+|---|---|---|
+| 手机直出、未剪的单人口播；用户说「粗剪一下」 | 阶段 A：机器粗剪 | 粗剪视频 + 同步审核 SRT + 剪辑时间记录 |
+| 剪映等软件人工精剪后、时间轴已经锁定的 MP4；用户说「生成字幕」 | 阶段 B：最终字幕 | 唯一的最终 SRT |
+| 已有 `.srt` | 校准子流程 | 校准后的 SRT；没有同时间轴音频时不做音频重锚定 |
 
-- 首次使用（或怀疑环境有变）先跑依赖自检，缺什么按提示装什么：
+未剪口播只说“配字幕”时，先问是否需要先走阶段 A。用户明确只要原始转写或明确视频已锁定时，跳过阶段 A。阶段 A 的视频进剪映后，必须等用户人工精剪并导出锁定时间轴版本，才进入阶段 B。
+
+为避免目录膨胀，原始转写、WAV、草稿 SRT 与 operations JSON 全部只放在会话临时目录；除非用户明确要求保留，媒体目录只留下本表列出的交付物。
+
+## 第 0 步：确认环境和输入
+
+首次使用（或怀疑环境有变）先运行：
 
 ```bash
 bash "<SKILL_DIR>/scripts/check_setup.sh"
 ```
 
-  必需：`ffmpeg`、`whisper-cli`（whisper.cpp）、`python3`、Whisper 模型 `ggml-large-v3-turbo.bin`（约 1.6 GB，自检脚本会给出下载命令；模型路径优先取 `$WHISPER_MODEL` 环境变量，默认 `~/Models/whisper/ggml-large-v3-turbo.bin`）。可选：`auto-editor`（只有删气口功能需要）。如果有必需项缺失，把自检输出里的安装命令告诉用户并协助安装，装齐前不要继续。
-- 确认输入文件存在，用 `ffprobe` 看一眼时长，顺口告诉用户（长视频转录要等一会儿，用户心里有数）。
-- 语言默认 `auto`。用户明确说了语言（如「中文」「英文视频」）就传对应的 `zh` / `en`。
+- 必需：`ffmpeg`、`whisper-cli`、`python3`、`$WHISPER_MODEL` 指向的 `ggml-large-v3-turbo.bin`。缺少或损坏模型时停止并告知用户；不要下载替代模型。
+- 阶段 A 还需要 `auto-editor`。
+- 用 `ffprobe` 检查输入时长。用户明确语言时传 `zh` / `en`；否则 `auto`。
+- 阶段 B 有 MP4 和 MP3 同时导出时，优先 MP4 内的音轨：它与最终剪映时间轴一致。MP3 的编码填充可能带来毫秒级首尾差异。
 
-### 第 1 步：删气口（仅对口播原始素材）
+## 阶段 A：机器粗剪（原始口播）
 
-**什么时候做**：输入是手机直出的口播原始素材（典型特征：`.MOV` 后缀、HDR 竖屏、单人口播），或用户明确说「删气口」。**什么时候跳过**：纯音频、别人的成片、已经剪辑过的视频、未安装 auto-editor，或用户说「不要剪」。拿不准就问一句。
+### A1. 先转写供重复检测，不做最终字幕
 
-两步走，剪切点检测和实际剪切分开，为的是**色彩无损**（auto-editor 自己导出会把 10-bit HLG 降成 8-bit，色调会坏）：
-
-```bash
-# 1. auto-editor 只做检测，输出剪切点 JSON（auto-editor 不在 PATH 时尝试 ~/.local/bin/auto-editor）
-auto-editor "<视频路径>" --edit "audio:threshold=4%" --margin 0.2sec \
-  --export v1 -o "<临时目录>/<basename>.cutlist.json"
-
-# 2. 按剪切点用 ffmpeg 重编码剪切，位深/色域/传递函数全部保持与源一致
-#    （macOS 上自动用 hevc_videotoolbox 硬件编码；其他平台回退 libx265，较慢）
-python3 "<SKILL_DIR>/scripts/autocut.py" \
-  "<视频路径>" "<临时目录>/<basename>.cutlist.json" "<视频所在目录>/<basename>.cut.mp4"
-```
-
-- 剪完用 `ffprobe` 对比源和输出的 `pix_fmt` / `color_space` / `color_primaries` / `color_transfer`，四项必须一致，否则停下来报告，不要交付变色的文件。
-- 阈值 `threshold=4%`、留白 `margin 0.2sec` 是验证过的默认值；用户嫌剪太狠→调大 margin，嫌剪不干净→调高 threshold。
-- 剪好的 `<basename>.cut.mp4` 是交付物之一（用户拿它进剪映等剪辑软件）。**后续所有步骤都以它为输入**，这样 SRT 时间轴和成片对齐。
-
-### 第 2 步：抽音轨
-
-如果第 1 步剪了气口，这一步及后续全部以 `<basename>.cut.mp4` 为输入（下文的 `<basename>` 即变为 `<basename>.cut`，SRT 文件名自然和剪好的视频同名，剪辑软件导入时能自动配对）。
-
-抽成 16 kHz 单声道 PCM WAV，放到会话临时目录（scratchpad），不要污染视频所在目录：
+从原始视频抽取 16 kHz 单声道 WAV，放入临时目录：
 
 ```bash
-ffmpeg -nostdin -loglevel error -y -i "<视频路径>" -vn -ar 16000 -ac 1 -c:a pcm_s16le "<临时目录>/<basename>.wav"
+ffmpeg -nostdin -loglevel error -y -i "<原始视频>" -vn -ar 16000 -ac 1 -c:a pcm_s16le "<临时目录>/<basename>.wav"
 ```
 
-### 第 3 步：Whisper 转录出原始 SRT
-
-用本地 whisper-cli + large-v3-turbo 模型：
+用统一的本机 Whisper 模型生成原始 SRT：
 
 ```bash
 whisper-cli \
   -m "${WHISPER_MODEL:-$HOME/Models/whisper/ggml-large-v3-turbo.bin}" \
   -l auto -mc 0 \
-  --output-srt --output-file "<视频所在目录>/<basename>" \
+  --output-srt --output-file "<临时目录>/<basename>.rough" \
   "<临时目录>/<basename>.wav"
 ```
 
-- `-mc 0` 必须带：关闭上下文沿用，防止无人声段（静音、纯 BGM）触发复读循环，复读同一句并吞掉真台词。这是实际踩过坑后加的，不要省略。
-- 原始 SRT 落在视频同目录，名为 `<basename>.srt`。
-- 转录完删掉临时 WAV。
-- 如果模型文件缺失或损坏：**停下来告知用户**，给出自检脚本里的下载命令，由用户决定。不要静默换用其他模型——换模型会让转录质量和用户预期不一致。
+- `-mc 0` 必须带，防止长静音触发复读循环。
+- 此 SRT 只用于检测重复口播与人工核对，**不写入视频目录，也不做最终字幕润色**。
 
-### 第 4 步：校准
+### A2. 检测长气口；此时不要导出 4K
 
-读取 `<SKILL_DIR>/references/calibration.md` 并严格按其执行：以上一步的 `<basename>.srt` 为输入，走完「脚本 auto pass（`scripts/srt_calibrate.py`）→ 语义复查 → 手工 operations 修补 → lint」全流程，产出 `<basename>.calibrated.srt`。
+切点检测和实际剪切分开，避免 auto-editor 破坏色彩，也避免在重复口播切点尚未验证时提前付出整片 4K 编码成本：
 
-不要自己手写校准逻辑替代该流程——错别字表（`references/fixed_terms.tsv`）、保护短语（`references/protected_phrases.txt`）、时间戳重分配都由它统一维护。
-
-### 第 5 步：中文排版（指北规范）
-
-对校准后的文件跑捆绑的排版脚本，应用「中文文案排版指北」的机械规则：
+`<审核目录>` 固定为 `<视频目录>/review/<basename>`，只容纳本次粗剪供人工审核的三份交付物。
 
 ```bash
-python3 "<SKILL_DIR>/scripts/zh_typography.py" "<basename>.calibrated.srt"
+# 阶段 A 的三个审核交付物集中放在这里；审核通过后可整目录清理
+mkdir -p "<视频目录>/review/<basename>"
+
+# auto-editor 只输出原始声音区间；不要给它加 margin
+auto-editor "<原始视频>" --edit "audio:threshold=4%" --margin 0sec \
+  --export v1 -o "<临时目录>/<basename>.auto-editor.json"
 ```
 
-脚本处理的规则（确定性，不要用模型手改代替）：
+- 纯口播或已经确认是普通口播停顿的相邻句长静音最多保留 `1.05` 秒；片头留 `0.17` 秒，片尾留 `0.37` 秒。实操演示中的操作型停顿不受此上限约束。用户觉得口播节奏太紧或太松时，只调整这三个留白参数，不调整 auto-editor 的 `margin`。
+- A2 只生成原始声音 cutlist。实际 4K 导出移到 A3 的预检门禁之后，并且整次粗剪只能执行一次。
 
-- 中文与英文单词之间加一个半角空格：`打开任意一个agent产品` → `打开任意一个 agent 产品`
-- 中文与数字之间加一个半角空格：`2026年` → `2026 年`
-- 「%」「°」跟随前面的数字、不与数字之间加空格，但后接中文时要空格：`超越99.99%学习AI的人` → `超越 99.99% 学习 AI 的人`
-- 全角标点与其他字符之间不加空格
-- 压缩连续空格、去行尾空格
+### A3. 操作型停顿、重复口播与导出前门禁
 
-脚本管不了的指北规范（专有名词大小写如 GitHub/iPhone、遇到完整英文句子时标点的全半角选择）在校准环节顺手把握，不确定就保持原样。
+如果原片包含网页、软件、大模型或课程实操演示，不能把“没有说话”直接等同于“无用气口”。先对不少于 `1.5` 秒的候选静音做画面—语义联合审计：
 
-### 第 6 步：交付
+```bash
+python3 "<SKILL_DIR>/scripts/pause_visual_audit.py" prepare \
+  --media "<原始视频>" \
+  --auto-json "<临时目录>/<basename>.auto-editor.json" \
+  --srt "<临时目录>/<basename>.rough.srt" \
+  --report "<临时目录>/<basename>.pause-audit.json" \
+  --sheet-dir "<临时目录>/<basename>.pause-sheets"
+```
 
-告诉用户各文件的路径和分工：
+- 必须打开全部联系表。每个候选按开始、中间、结束三帧排列，并结合报告里的前后口播判断。
+- 分类只能使用：`operation`、`wait_generation`、`page_switch`、`typing_or_input`、`quiet_speech`、`ordinary_speech_pause`、`retake_context`、`uncertain`，每一项都要填写具体 `reason`。
+- 页面结构变化、输入框文字增长、按钮/验证码状态变化、结果逐步生成或滚动，以及“打开、粘贴、发送、等待、来看结果”等操作叙事，都属于视觉上有意义的时间。确认是空白且不超过 `7.0` 秒时完整保留；超过 `7.0` 秒时统一保留首尾各 `3.5` 秒、裁掉中间，交给用户精剪时重点复核。这样同时保住“发起操作”和“结果出现”。
+- auto-editor 的“低于 4%”不等于真正无声。报告会结合 `-35dB` 静音覆盖率和落在候选内部的 ASR 句段中点；出现 `possible_quiet_speech: true` 时，必须标为 `quiet_speech`、`retake_context` 或其他保护类型，不能标成普通静音。
+- `ordinary_speech_pause` 才交给默认规则压缩到最多 `1.05` 秒。受保护分类执行上述 `7.0` 秒上限，但 `possible_quiet_speech: true` 时禁止执行该上限并完整保留。`retake_context` 只说明这里需要继续做重复口播审计；只有后续左右语义锚点门禁确认重说后，才能删除前一次口播。
+- 证据不足时标为 `uncertain` 并完整保留；宁可让用户人工精剪，也不要制造网页瞬移、输入内容突变或模型回答凭空出现。
 
-- `<basename>.cut.mp4` — 删好气口、色彩与原片一致的视频（若执行了第 1 步），**进剪辑软件用这份**，同时报告删了几秒气口
-- `<basename>.srt` — 原始转录，留作对照
-- `<basename>.calibrated.srt` — **成品字幕，直接拖进剪辑软件用这份**
+按 `references/pause-audit-decisions.example.json` 另存逐项判断，再应用保护区间：
 
-简要说明校准改了哪几类东西（错别字几处、合并/重切几处），不要全文粘贴字幕内容。
+```bash
+python3 "<SKILL_DIR>/scripts/pause_visual_audit.py" apply \
+  --auto-json "<临时目录>/<basename>.auto-editor.json" \
+  --report "<临时目录>/<basename>.pause-audit.json" \
+  --decisions "<临时目录>/<basename>.pause-decisions.json" \
+  --output-json "<临时目录>/<basename>.operation-protected.json" \
+  --max-protected-pause 7.0
+```
+
+`apply` 必须显示 `audit_pass: true`，并在报告中记录 `capped_protected_count`、每段实际保留范围和 `capped_to_seconds`。任一候选未分类或没有理由都会失败并禁止 4K 导出。纯人物口播、没有任何屏幕操作时可跳过本门禁；一旦出现实操演示就必须执行。
+
+- 对照 A1 的原始 SRT、音频和长停顿，寻找“前一次没说好 → 停顿 → 完整重说”的紧邻重复。文本相似且音频语义明确重复才可剪；疑似重复、课程录屏或已剪成片一律保留。
+- 不能直接把 Whisper 句段起止当作剪切边界。Whisper 时间戳只提供 `discard_start` / `retain_hint` 的语义提示；保留句开头必须由附近真实长静音末端支持。
+- 为每个确认候选创建临时 JSON。字段格式见 `references/roughcut-candidates.example.json`：
+  - `discard_start`：前一次废弃口播开始时间；
+  - `retain_hint`：Whisper 推测的完整重说开始时间；
+  - `left_anchors`：剪切前一条必须完整保留的语义短语，可提供多个识别变体；
+  - `right_anchors`：完整重说开头必须出现的语义短语，可提供多个识别变体。
+- 左右锚点应选对 ASR 小幅错字稳健的核心短语，不要依赖容易误识别的单个专名。默认预览每个切点左侧 10 秒、右侧 5 秒。
+- 在 `snap_radius` 内，保留句切点默认吸附到**离 `retain_hint` 最近**的合格长静音末端；距离相同时才选更长的静音。这样不会因更早的停顿更长而错误吸附。音频锚点门禁仍是最终裁决，不能只相信吸附距离。
+
+先生成合并 cutlist 和一次性音频预览：
+
+```bash
+python3 "<SKILL_DIR>/scripts/roughcut_preflight.py" prepare \
+  --media "<原始视频>" \
+  --wav "<临时目录>/<basename>.wav" \
+  --candidates "<临时目录>/<basename>.repeat-candidates.json" \
+  --auto-json "<临时目录>/<basename>.operation-protected.json" \
+  --combined-json "<临时目录>/<basename>.combined.json" \
+  --preview-wav "<临时目录>/<basename>.cut-preview.wav" \
+  --report "<临时目录>/<basename>.preflight.json"
+whisper-cli \
+  -m "${WHISPER_MODEL:-$HOME/Models/whisper/ggml-large-v3-turbo.bin}" \
+  -l auto -mc 0 --output-srt \
+  --output-file "<临时目录>/<basename>.cut-preview.raw" \
+  "<临时目录>/<basename>.cut-preview.wav"
+python3 "<SKILL_DIR>/scripts/roughcut_preflight.py" validate \
+  --preview-srt "<临时目录>/<basename>.cut-preview.raw.srt" \
+  --report "<临时目录>/<basename>.preflight.json"
+```
+
+- `validate` 必须 N/N 通过。任何 `left_ok` / `right_ok` 失败都禁止 4K 导出；先增加上下文、修正 ASR 锚点变体或重新判断候选，再重跑几秒钟的音频门禁。
+- 如果没有任何高置信度重复候选，跳过重复口播预览门禁：实操素材把已经通过画面审计的 `operation-protected.json` 作为 `combined.json`，纯人物口播才直接使用 auto-editor JSON；不要为了满足流程虚构候选。这种情况运行 `autocut.py` 时不传 `--preflight-report`，但实操素材仍必须传 `--pause-audit-report`。
+- 门禁通过后才执行本次粗剪唯一一次 4K 导出：
+
+```bash
+python3 "<SKILL_DIR>/scripts/autocut.py" \
+  "<原始视频>" "<临时目录>/<basename>.combined.json" \
+  "<审核目录>/<basename>.rough-cut.mp4" \
+  --max-pause 1.05 --head-pad 0.17 --tail-pad 0.37 \
+  --report "<审核目录>/<basename>.rough-cut.cutlist.json" \
+  --preflight-report "<临时目录>/<basename>.preflight.json" \
+  --pause-audit-report "<临时目录>/<basename>.pause-audit.json"
+```
+
+纯人物口播按前述规则跳过画面审计时，同时省略 `--pause-audit-report`；实操演示不得省略。
+
+- 不能只删 SRT 文字：每一段实际删除范围都要写入源视频时间戳和剪辑清单。把已验证的重复范围写入 `manual_repeat_ranges_seconds`。
+- 实操演示的 cutlist 还必须写入 `protected_operation_ranges_seconds` 和 `pause_visual_audit_pass: true`，让人工复核能区分“主动保留的操作时间”和“普通气口”。
+- `autocut.py` 用预计成片时长而不是原片时长计算进度；ffmpeg 收尾的 `out_time_ms=N/A` 必须安全忽略，并只在进程成功退出后显示 100%。因此进度解析异常不能再阻止已经成功的编码写出 cutlist。
+- `autocut.py` 必须把每个切点统一量化到源视频帧边界，使用同一边界逐段成对裁切视频和音频，再用 `concat` 拼接。禁止用 `select` / `aselect` 独立筛流并分别重建时间轴；视频帧与音频帧取整粒度不同，切点越多口型漂移会越大。
+- 记录抽轨、分析/转写、预检、4K 导出和成片复检的墙钟时间。向用户报告真实百分比时应使用可观测的 ffmpeg 进度；拿不到精确进度就明确说是估算。
+
+### A4. 生成与粗剪视频同步的审核 SRT
+
+粗剪完成、所有确认的重复范围也已应用后，对**粗剪视频本身**重新转写，避免用原片字幕硬映射造成错位。原始转写和草稿放在临时目录；只输出一份审核字幕：
+
+```bash
+ffmpeg -nostdin -loglevel error -y -i "<审核目录>/<basename>.rough-cut.mp4" \
+  -vn -ar 16000 -ac 1 -c:a pcm_s16le "<临时目录>/<basename>.rough-cut.wav"
+whisper-cli -m "${WHISPER_MODEL:-$HOME/Models/whisper/ggml-large-v3-turbo.bin}" \
+  -l auto -mc 0 --output-srt --output-file "<临时目录>/<basename>.rough-cut.raw" \
+  "<临时目录>/<basename>.rough-cut.wav"
+
+# 成片转写后，先复核所有重复切点的左右锚点；失败不应自动再渲染
+python3 "<SKILL_DIR>/scripts/roughcut_preflight.py" validate-final \
+  --srt "<临时目录>/<basename>.rough-cut.raw.srt" \
+  --candidates "<临时目录>/<basename>.repeat-candidates.json"
+
+# 一次性执行：自动校准/拆分 → 草稿 lint → 重锚定 → 排版 → 最终 lint
+python3 "<SKILL_DIR>/scripts/review_srt_pipeline.py" \
+  "<审核目录>/<basename>.rough-cut.mp4" \
+  "<临时目录>/<basename>.rough-cut.raw.srt" \
+  "<审核目录>/<basename>.rough-cut.srt" \
+  --draft-srt "<临时目录>/<basename>.rough-cut.draft.srt"
+```
+
+- 审核 SRT 的作用是让用户在剪映中更低成本地检查口播、重复与节奏；不做人工语义精修，避免把最终字幕工作重复一遍。
+- 只有在粗剪视频完成后重新转写，审核 SRT 才能与它严格同轴。
+- `review_srt_pipeline.py` 必须先让草稿通过显示长度与时序 lint，才运行整片音频重锚定。草稿失败时先修复；人工修好草稿后用 `--skip-auto` 继续，避免重复跑 `silencedetect`。
+- `validate-final` 必须 N/N 通过。若预检通过而成片失败，停止交付并报告该实验性门禁的失效原因；不要静默启动第二次整片 4K 渲染。
+
+### A5. 单次完整解码与画面验收
+
+审核 SRT 通过后，用同一个 ffmpeg 解码进程同时完成完整音视频解码、代表帧抽取和全部重复切点前后截图：
+
+```bash
+python3 "<SKILL_DIR>/scripts/roughcut_inspect.py" \
+  --source "<原始视频>" \
+  --output "<审核目录>/<basename>.rough-cut.mp4" \
+  --cutlist "<审核目录>/<basename>.rough-cut.cutlist.json" \
+  --srt "<审核目录>/<basename>.rough-cut.srt" \
+  --sheet "<临时目录>/<basename>.inspection.jpg" \
+  --report "<临时目录>/<basename>.inspection.json"
+```
+
+- 脚本必须验证完整解码成功，并对比宽高、帧率、`pix_fmt`、`color_space`、`color_primaries`、`color_transfer`；任一项不一致即停止交付。
+- 脚本必须核对 cutlist 预计时长、成片实际时长和 SRT 末尾。默认允许 AAC/容器产生最多 `0.5` 秒首尾差异。
+- 脚本必须确认 cutlist 使用 `paired_segment_concat_v1`，并检查成片音视频流的起点差和终点差；任一绝对值默认不得超过 `0.05` 秒。旧版独立筛流产物即使能完整解码也必须拒绝，不能把静态截图或字幕同轴误当作人物口型同步。
+- 必须打开联系表肉眼检查。它包含整片代表帧，以及每个高置信度重复切点前后各一帧；不要再另跑一次完整解码或另生成第二张抽查图。
+- 联系表和检查 JSON 只放临时目录，不增加阶段 A 的正式交付物。
+
+### A6. 阶段 A 交付并停止
+
+交付且仅交付审核目录中的 `<basename>.rough-cut.mp4`、`<basename>.rough-cut.srt` 与 `<basename>.rough-cut.cutlist.json`，说明删了哪些长气口、哪些重复口播。**不要在此时制作最终字幕，更不要烧录。**
+
+用户把粗剪视频导入剪映进行人工精剪，检查误剪、节奏、画面与转场；完成后导出一个时间轴锁定的 MP4（或完全同时间轴的音频）并交给阶段 B。
+
+## 阶段 B：最终字幕（人工精剪后）
+
+### B1. 抽音轨并重新转写
+
+阶段 B 只接受锁定后的媒体，不再删气口或删除重复。抽取 WAV：
+
+```bash
+ffmpeg -nostdin -loglevel error -y -i "<精剪 MP4 或同轴音频>" -vn -ar 16000 -ac 1 -c:a pcm_s16le "<临时目录>/<basename>.wav"
+```
+
+生成最终时间轴的原始 SRT 到临时目录：
+
+```bash
+whisper-cli \
+  -m "${WHISPER_MODEL:-$HOME/Models/whisper/ggml-large-v3-turbo.bin}" \
+  -l auto -mc 0 \
+  --output-srt --output-file "<临时目录>/<basename>.raw" \
+  "<临时目录>/<basename>.wav"
+```
+
+原始 `<basename>.raw.srt` 只留在临时目录。它的文本是基线，但 Whisper 输出的是句段级时间戳，不应直接作为最终字幕交付。
+
+### B2. 术语、语义与断句校准
+
+读取 `<SKILL_DIR>/references/calibration.md`，严格执行：
+
+1. `srt_calibrate.py auto` 做术语与机械修正，输出临时的 `<basename>.draft.srt`。
+2. 语义复查并用 operations 修复不完整短语、专名切断、孤立连词和超长字幕。默认不自动拆句或按文字比例挪时轴；语义操作必须显式、可复查。
+3. 在连续语音中没有可验证停顿时，不要声称获得了逐词级时间；宁可保留保守边界，也不要虚构精准切点。
+
+### B3. 用真实音频重锚定句首
+
+Whisper 常把下一句的起点放在上一句结束处，即使中间还有静音。语义校准后，必须运行：
+
+```bash
+python3 "<SKILL_DIR>/scripts/srt_audio_reanchor.py" \
+  "<精剪 MP4 或同轴音频>" "<临时目录>/<basename>.draft.srt" \
+  "<媒体目录>/<basename>.srt"
+```
+
+- 脚本用 `ffmpeg silencedetect` 找真实静音：仅当字幕开头位于一段尚未结束的静音中，才推到下一次真实开口，并收紧前一句结尾。
+- 默认阈值为 `-35dB`、最短静音 `0.12` 秒；遇到持续的底噪或背景音乐，先用短片段复核再调整 `--threshold`，不要全局盲调。
+- 它不改文字、不伪造连续语音中的逐词边界。没有同时间轴媒体时跳过此步，并明确说明最终时间无法做音频重锚定。
+
+### B4. 中文排版与验证
+
+```bash
+python3 "<SKILL_DIR>/scripts/zh_typography.py" "<媒体目录>/<basename>.srt"
+python3 "<SKILL_DIR>/scripts/srt_calibrate.py" lint "<媒体目录>/<basename>.srt"
+```
+
+- 排版脚本处理中英文、中文与数字之间的空格、百分号/角度符号和多余空格。
+- `lint` 必须无警告；同时抽查长句、术语、被拆分过的句子和音频重锚定较大的片段。
+
+## 交付边界
+
+默认到这里停止。交付：
+
+- 阶段 B：`<basename>.srt`，唯一的最终成品，直接导入剪映。
+- 阶段 A：审核目录中的 `<basename>.rough-cut.mp4`、`<basename>.rough-cut.srt`、`<basename>.rough-cut.cutlist.json`。
+- 原始转写、草稿和 WAV 都在临时目录；完成交付后清理，不在项目目录留下多份中间文件。
+
+**没有用户对 SRT 的明确确认，绝不烧录、渲染或重编码硬字幕视频。** 硬字幕属于本 skill 之外的独立后续工作。
 
 ## 边界情况
 
 | 情况 | 处理 |
 |---|---|
-| 输入是纯音频（mp3/m4a/wav） | 同样流程，跳过「视频」措辞即可 |
-| 输入是现成的 .srt 文件 | 跳过第 0–3 步，直接从第 4 步校准开始（此场景只需 python3，无须 ffmpeg/whisper） |
-| 视频没有音轨 | ffmpeg 会报错，告知用户，不要继续 |
-| 同名 `.srt` 已存在 | 直接覆盖没关系——它本来就是本流程的中间产物；但 `.calibrated.srt` 若已存在且用户改过，先问一句 |
-| 用户只要原始转录、明确说不要润色 | 做完第 3 步就停 |
-| 用户要烧录进视频 | 那是另一件事，交付 SRT 后问清需求再说 |
-| 非 macOS 平台 | 转录、校准、排版全流程可用；删气口一步会用 libx265 软件编码（慢），且色彩保真仅在 macOS + videotoolbox 上验证过，剪完务必做第 1 步的 ffprobe 四项对比 |
+| 输入是纯音频 | 可直接走阶段 B；它必须与最终剪映时间轴一致。 |
+| 输入是现成 SRT | 只做 B2/B4；若没有对应媒体，跳过 B3。 |
+| 视频没有音轨 | 停止并告知用户。 |
+| 最终 `<basename>.srt` 已存在且用户可能编辑过 | 先询问，避免覆盖人工修改。 |
+| 用户明确只要原始转写 | 完成 B1 即停止。 |
+| 用户要求烧录 | 先交付并等待确认；本 skill 不执行烧录或渲染。 |
+| 非 macOS | 转写、校准、重锚定可用；阶段 A 的色彩保真仅在 macOS + VideoToolbox 验证过。 |
