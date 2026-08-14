@@ -98,8 +98,25 @@ def progress_percent(seconds, expected_duration):
     return min(99, max(0, int(seconds / expected_duration * 100)))
 
 
-def verify_protected_ranges(payload, fps, pause_audit):
-    """确认审计要求保留的帧在最终输入 cutlist 中仍是保留状态。"""
+def subtract_intervals(interval, removed):
+    """从一个半开区间中扣除已经通过门禁的删除区间。"""
+    segments = [interval]
+    for cut_start, cut_end in removed:
+        next_segments = []
+        for start, end in segments:
+            if cut_end <= start or cut_start >= end:
+                next_segments.append((start, end))
+                continue
+            if start < cut_start:
+                next_segments.append((start, cut_start))
+            if cut_end < end:
+                next_segments.append((cut_end, end))
+        segments = next_segments
+    return segments
+
+
+def verify_protected_ranges(payload, fps, pause_audit, preflight=None):
+    """确认保护帧已保留；允许已通过语义门禁的重复范围覆盖保护区间。"""
     failures = []
     if payload.get("chunks") is not None:
         keep_chunks = [
@@ -111,6 +128,11 @@ def verify_protected_ranges(payload, fps, pause_audit):
             (round(float(item["start"]) * fps), round(float(item["end"]) * fps))
             for item in payload.get("kept_ranges_seconds", [])
         ]
+    repeat_cuts = [
+        (round(float(item["discard_start"]) * fps),
+         round(float(item["discard_end"]) * fps))
+        for item in (preflight or {}).get("resolved_ranges", [])
+    ]
     for item in pause_audit.get("protected_ranges", []):
         required = item.get("retained_ranges_seconds") or [{
             "start": item["start"], "end": item["end"],
@@ -118,10 +140,16 @@ def verify_protected_ranges(payload, fps, pause_audit):
         for retained in required:
             start = round(float(retained["start"]) * fps)
             end = round(float(retained["end"]) * fps)
-            covered = sum(max(0, min(end, right) - max(start, left))
-                          for left, right in keep_chunks)
-            if covered < end - start:
-                failures.append(item.get("id", f"{item['start']}-{item['end']}"))
+            for required_start, required_end in subtract_intervals(
+                    (start, end), repeat_cuts):
+                covered = sum(
+                    max(0, min(required_end, right) - max(required_start, left))
+                    for left, right in keep_chunks
+                )
+                if covered < required_end - required_start:
+                    failures.append(item.get("id", f"{item['start']}-{item['end']}"))
+                    break
+            if failures and failures[-1] == item.get("id"):
                 break
     if failures:
         raise SystemExit(
@@ -284,7 +312,7 @@ def main(argv=None):
 
     cutlist_payload = json.loads(Path(cutlist_path).read_text(encoding="utf-8"))
     if pause_audit:
-        verify_protected_ranges(cutlist_payload, fps, pause_audit)
+        verify_protected_ranges(cutlist_payload, fps, pause_audit, preflight=preflight)
     previous_report = cutlist_payload if args.reuse_report else None
     if args.reuse_report:
         raw_keep = [

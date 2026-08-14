@@ -52,6 +52,18 @@ class AutocutTests(unittest.TestCase):
         }]}
         MODULE.verify_protected_ranges(payload, 60, audit)
 
+    def test_validated_repeat_can_override_protected_range(self):
+        payload = {"chunks": [[0, 120, 1.0], [120, 180, 99999.0], [180, 240, 1.0]]}
+        audit = {"protected_ranges": [{"id": "retake", "start": 1, "end": 3}]}
+        preflight = {"resolved_ranges": [{"discard_start": 2, "discard_end": 3}]}
+        MODULE.verify_protected_ranges(payload, 60, audit, preflight=preflight)
+
+    def test_unvalidated_gap_inside_protected_range_still_fails(self):
+        payload = {"chunks": [[0, 120, 1.0], [120, 180, 99999.0], [180, 240, 1.0]]}
+        audit = {"protected_ranges": [{"id": "retake", "start": 1, "end": 3}]}
+        with self.assertRaises(SystemExit):
+            MODULE.verify_protected_ranges(payload, 60, audit, preflight={})
+
     def test_progress_uses_expected_output_duration(self):
         seconds = MODULE.parse_progress_seconds("out_time_ms", "281000000")
         self.assertEqual(MODULE.progress_percent(seconds, 562), 50)
