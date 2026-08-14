@@ -1,6 +1,8 @@
 # canonical	aliases	mode	context_regex	note
 # mode: always = always replace aliases; contextual = replace only when context_regex matches nearby cues.
 # Alias entries are separated with |. Prefix an alias with re: to use a regular expression.
+# This file is part of the skill's error log (see calibration.md workflow step 8):
+# every real recognition mistake gets written back here so it is caught automatically next time, not just fixed once by hand.
 ChatGPT	CHAT g b t|chat g b t|Chat GPT|chat gpt|chatgpt|re:\bchat\s*g\s*b\s*t\b	always		固定写法
 Codex	codex|CODEX	always		产品固定写法
 Claude	cloud|Cloud|克劳德|Claude AI	contextual	大模型|模型|AI|LLM|Anthropic|聊天|助手|智能体|代码|编程|上下文|token|推理|API	仅在大模型/Anthropic 语境中把 cloud 改为 Claude
