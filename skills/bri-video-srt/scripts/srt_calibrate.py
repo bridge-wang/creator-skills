@@ -658,10 +658,43 @@ def default_output_path(input_path: Path) -> Path:
     return input_path.with_name(f"{input_path.stem}.calibrated{input_path.suffix}")
 
 
+def find_unresolved_aliases(cues: list[Cue], rules: Iterable[Rule]) -> list[tuple[int, str, str]]:
+    """Detect aliases that fixed_terms.tsv says should have been replaced but
+    still appear verbatim. A non-empty result almost always means term
+    calibration (srt_calibrate.py auto/apply) was skipped or run against the
+    wrong file before this SRT was produced."""
+    hits: list[tuple[int, str, str]] = []
+    rules = list(rules)
+    for i, cue in enumerate(cues):
+        context = None
+        for rule in rules:
+            if rule.mode == "contextual":
+                if not rule.context_regex:
+                    continue
+                if context is None:
+                    context = " ".join(
+                        part.text
+                        for part in cues[max(0, i - 2) : min(len(cues), i + 3)]
+                        if part.text
+                    )
+                if not re.search(rule.context_regex, context, flags=re.I):
+                    continue
+            for alias in rule.aliases:
+                match = re.search(alias_pattern(alias), cue.text, flags=re.I)
+                # Case-insensitive aliases (e.g. "ai" for canonical "AI") match
+                # the already-correct canonical text too; only flag it when the
+                # matched substring is not already exactly the canonical form.
+                if match and match.group(0) != rule.canonical:
+                    hits.append((i + 1, alias, rule.canonical))
+                    break
+    return hits
+
+
 def lint_cues(
     cues: list[Cue],
     max_chars: int = DEFAULT_MAX_DISPLAY_CHARS,
     phrases: Iterable[str] = (),
+    rules: Iterable[Rule] = (),
 ) -> list[str]:
     warnings: list[str] = []
     previous_end = -1
@@ -672,6 +705,9 @@ def lint_cues(
             warnings.append(f"cue {index}: overlaps previous cue")
         if not cue.text.strip():
             warnings.append(f"cue {index}: empty text")
+        stripped = cue.text.rstrip()
+        if stripped and stripped[-1] in SOFT_END:
+            warnings.append(f"cue {index}: ends with dangling connector '{stripped[-1]}'")
         duration_s = max((cue.end_ms - cue.start_ms) / 1000, 0.001)
         cps = text_weight(cue.text) / duration_s
         if cps > 18:
@@ -688,6 +724,11 @@ def lint_cues(
                 if issue:
                     warnings.append(f"cue {index}: {issue} across next cue")
         previous_end = cue.end_ms
+    for cue_index, alias, canonical in find_unresolved_aliases(cues, rules):
+        warnings.append(
+            f"cue {cue_index}: unresolved alias '{alias}' should be '{canonical}' "
+            "(term calibration may have been skipped)"
+        )
     return warnings
 
 
@@ -725,8 +766,8 @@ def apply_operations(cues: list[Cue], operations: Iterable[dict]) -> list[Cue]:
                 raise ValueError("repartition_pair requires adjacent cues")
             left = cues[left_pos]
             right = cues[right_pos]
-            left_text = normalize_text(str(op["left_text"]))
-            right_text = normalize_text(str(op["right_text"]))
+            left_text = clean_split_piece(str(op["left_text"]))
+            right_text = clean_split_piece(str(op["right_text"]))
             boundary = op.get("boundary_ms")
             if boundary is None:
                 boundary = proportional_boundaries(left.start_ms, right.end_ms, [left_text, right_text])[0]
@@ -739,7 +780,7 @@ def apply_operations(cues: list[Cue], operations: Iterable[dict]) -> list[Cue]:
         elif op_type == "split":
             position = find_position(cues, int(op["cue_id"]))
             original = cues[position]
-            texts = [normalize_text(str(text)) for text in op["texts"]]
+            texts = [clean_split_piece(str(text)) for text in op["texts"]]
             if len(texts) < 2:
                 raise ValueError("split requires at least two texts")
             boundaries = op.get("boundary_ms_list")
@@ -762,7 +803,7 @@ def apply_operations(cues: list[Cue], operations: Iterable[dict]) -> list[Cue]:
             if positions != list(range(min(positions), max(positions) + 1)):
                 raise ValueError(f"repartition_span cue_ids must be contiguous: {cue_ids}")
             selected = cues[min(positions) : max(positions) + 1]
-            texts = [normalize_text(str(text)) for text in op["texts"]]
+            texts = [clean_split_piece(str(text)) for text in op["texts"]]
             if len(texts) < 2:
                 raise ValueError("repartition_span requires at least two texts")
             boundaries = op.get("boundary_ms_list")
@@ -815,7 +856,7 @@ def cmd_auto(args: argparse.Namespace) -> int:
         f"merges: {merged}; splits: {split_count}; "
         f"max display chars: {args.max_chars}"
     )
-    warnings = lint_cues(cues, args.max_chars, phrases)
+    warnings = lint_cues(cues, args.max_chars, phrases, rules)
     if warnings:
         print("lint warnings:", file=sys.stderr)
         for warning in warnings:
@@ -835,7 +876,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
     cues = apply_operations(cues, operations)
     write_srt(cues, output_path)
     print(f"wrote {output_path}")
-    warnings = lint_cues(cues, args.max_chars, phrases)
+    warnings = lint_cues(cues, args.max_chars, phrases, rules)
     if warnings:
         print("lint warnings:", file=sys.stderr)
         for warning in warnings:
@@ -862,7 +903,7 @@ def cmd_lint(args: argparse.Namespace) -> int:
     cues = parse_srt(Path(args.input))
     rules = load_rules(Path(args.terms))
     phrases = load_phrases(Path(args.phrases), rules)
-    warnings = lint_cues(cues, args.max_chars, phrases)
+    warnings = lint_cues(cues, args.max_chars, phrases, rules)
     if not warnings:
         print("OK")
         return 0
