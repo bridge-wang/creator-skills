@@ -20,6 +20,10 @@ description: 面向中文口播和屏幕实操的两阶段「粗剪 → 人工�
 | A：机器粗剪 | A0 环境 → A1 侦测转写 → A2 气口检测 → A3 操作停顿+重复口播+4K 导出（唯一一次）→ A4 审核字幕 → A5 完整解码验收 → A6 收口交付 |
 | B：最终字幕 | A0 环境 → B1 侦测转写 → B2 校准（含错题集回写）→ B3 音频重锚定 → B4 排版验证 → B5 收口交付 |
 
+## 运行账本与异常闭环
+
+正常执行也要记录总开始/结束时间和各外部命令的墙钟时间。任何门禁失败、重试、估时明显偏离，或用户要求复盘时，必须读取并执行 [异常处理与复利手册](references/exception-playbook.md)：先选择不会触发第二次 4K 导出的最低成本回退，再把可复用的方法写回手册、术语库或脚本测试。复盘的目标是解释每段时间对应了什么工作，并让同类状况下一次有现成处置路径，不做责任归因。
+
 ## 先判断所处阶段
 
 | 输入状态 | 进入阶段 | 交付 |
@@ -143,7 +147,7 @@ python3 "<SKILL_DIR>/scripts/pause_visual_audit.py" apply \
   - `retain_hint`：Whisper 推测的完整重说开始时间；
   - `left_anchors`：剪切前一条必须完整保留的语义短语，可提供多个识别变体；
   - `right_anchors`：完整重说开头必须出现的语义短语，可提供多个识别变体。
-- 左右锚点应选对 ASR 小幅错字稳健的核心短语，不要依赖容易误识别的单个专名。默认预览每个切点左侧 10 秒、右侧 5 秒。
+- 左右锚点应选对 ASR 小幅错字稳健、同时又能区分“废弃说法”和“保留重说”的核心短语，不要依赖容易误识别的单个专名，也不能把两边都会出现的通用短语作为唯一锚点。若找不到有区分度的锚点，增加上下文、使用两个连续语义锚点，或放弃自动删除该候选。默认预览每个切点左侧 10 秒、右侧 5 秒。
 - 在 `snap_radius` 内，保留句切点默认吸附到**离 `retain_hint` 最近**的合格长静音末端；距离相同时才选更长的静音。音频锚点门禁仍是最终裁决，不能只相信吸附距离。
 
 ```bash
@@ -169,7 +173,7 @@ python3 "<SKILL_DIR>/scripts/roughcut_preflight.py" validate \
 
 **门禁 2**：
 
-- [ ] `validate` 必须 N/N 通过。任何 `left_ok` / `right_ok` 失败都禁止 4K 导出；先增加上下文、修正 ASR 锚点变体或重新判断候选，再重跑几秒钟的音频门禁。
+- [ ] `validate` 必须 N/N 通过。任何 `left_ok` / `right_ok` 失败都禁止 4K 导出；先增加上下文、补充含义等价且仍有区分度的 ASR 变体，或重新判断候选，再只重跑短预览门禁。禁止为了“通过”而把锚点弱化成废弃与保留两边都会出现的通用短语。
 - [ ] 如果没有任何高置信度重复候选，跳过重复口播预览门禁：实操素材把已经通过画面审计的 `operation-protected.json` 作为 `combined.json`，纯人物口播才直接使用 auto-editor JSON；不要为了满足流程虚构候选。这种情况运行 `autocut.py` 时不传 `--preflight-report`，但实操素材仍必须传 `--pause-audit-report`。
 
 **动作 3：门禁通过后执行本次粗剪唯一一次 4K 导出**
@@ -192,7 +196,7 @@ python3 "<SKILL_DIR>/scripts/autocut.py" \
 - [ ] 实操演示的 cutlist 还必须写入 `protected_operation_ranges_seconds` 和 `pause_visual_audit_pass: true`，让人工复核能区分“主动保留的操作时间”和“普通气口”。
 - [ ] `autocut.py` 用预计成片时长而不是原片时长计算进度；ffmpeg 收尾的 `out_time_ms=N/A` 必须安全忽略，并只在进程成功退出后显示 100%。因此进度解析异常不能再阻止已经成功的编码写出 cutlist。
 - [ ] `autocut.py` 必须把每个切点统一量化到源视频帧边界，使用同一边界逐段成对裁切视频和音频，再用 `concat` 拼接。禁止用 `select` / `aselect` 独立筛流并分别重建时间轴；视频帧与音频帧取整粒度不同，切点越多口型漂移会越大。
-- [ ] 记录抽轨、分析/转写、预检、4K 导出和成片复检的墙钟时间。向用户报告真实百分比时应使用可观测的 ffmpeg 进度；拿不到精确进度就明确说是估算。
+- [ ] 记录抽轨、分析/转写、画面审计、重复预检、每一次审核字幕处理、4K 导出和成片复检的墙钟时间；重试不得合并隐藏。4K 导出估时优先使用同一机器、分辨率、帧率和编码器的最近实测“输出时长倍率”，没有可比基线就明确说估时未知。向用户报告真实百分比时应使用可观测的 ffmpeg 进度；拿不到精确进度就明确说是估算。
 
 ### A4. 生成与粗剪视频同步的审核 SRT
 
@@ -212,12 +216,22 @@ python3 "<SKILL_DIR>/scripts/roughcut_preflight.py" validate-final \
   --srt "<临时目录>/<basename>.rough-cut.raw.srt" \
   --candidates "<临时目录>/<basename>.repeat-candidates.json"
 
-# 一次性执行：自动校准/拆分 → 草稿 lint → 重锚定 → 排版 → 最终 lint
+# 先生成草稿；在第一次整片音频重锚定之前集中完成术语、边界和长度检查
+python3 "<SKILL_DIR>/scripts/srt_calibrate.py" auto \
+  "<临时目录>/<basename>.rough-cut.raw.srt" \
+  --output "<临时目录>/<basename>.rough-cut.draft.srt" \
+  --no-preserve-timing --max-chars 19
+
+python3 "<SKILL_DIR>/scripts/srt_calibrate.py" lint \
+  "<临时目录>/<basename>.rough-cut.draft.srt" --max-chars 19
+
+# 复核并一次性修完草稿后，从草稿 lint → 重锚定 → 排版 → 最终 lint
 python3 "<SKILL_DIR>/scripts/review_srt_pipeline.py" \
   "<审核目录>/<basename>.rough-cut.mp4" \
   "<临时目录>/<basename>.rough-cut.raw.srt" \
   "<审核目录>/<basename>.rough-cut.srt" \
-  --draft-srt "<临时目录>/<basename>.rough-cut.draft.srt"
+  --draft-srt "<临时目录>/<basename>.rough-cut.draft.srt" \
+  --skip-auto
 ```
 
 `review_srt_pipeline.py` 内部复用的是 B2 校准同一套规则，包括 `calibration.md` 第 8 步的错题回收：这里发现的新识别错例同样要写回 `fixed_terms.tsv` / `protected_phrases.txt`，不要因为是审核字幕就当作可以不闭环。
@@ -226,7 +240,8 @@ python3 "<SKILL_DIR>/scripts/review_srt_pipeline.py" \
 
 - [ ] 审核 SRT 的作用是让用户在剪映中更低成本地检查口播、重复与节奏；不做人工语义精修，避免把最终字幕工作重复一遍。
 - [ ] 只有在粗剪视频完成后重新转写，审核 SRT 才能与它严格同轴。
-- [ ] `review_srt_pipeline.py` 必须先让草稿通过显示长度与时序 lint，才运行整片音频重锚定。草稿失败时先修复；人工修好草稿后用 `--skip-auto` 继续，避免重复跑 `silencedetect`。
+- [ ] 第一次整片音频重锚定前，集中扫描 raw/draft 中的已知别名、新专名错识别、被拆开的受保护短语、不完整语义单元和短时高密度字幕；先完成文本/边界操作，回写 `fixed_terms.tsv` / `protected_phrases.txt`，并让草稿通过显示长度与时序 lint。`--skip-auto` 只跳过自动校准，仍会重新运行整片音频重锚定；因此最终 lint 失败后的每次重跑都必须单独计时。
+- [ ] 若最终 lint 因重锚定后的短时高密度失败，回到 draft 合并或重新分配完整语义单元，先 lint，再用 `--skip-auto` 重跑；不要直接修改最终 SRT 绕过闭环，也不要重新渲染视频。
 - [ ] `validate-final` 必须 N/N 通过。若预检通过而成片失败，停止交付并报告该实验性门禁的失效原因；不要静默启动第二次整片 4K 渲染。
 
 ### A5. 单次完整解码与画面验收
@@ -266,6 +281,7 @@ python3 "<SKILL_DIR>/scripts/roughcut_inspect.py" \
 - [ ] 清点 `<审核目录>` 内的实际文件列表，逐一对照上表；表外的任何文件——不论格式，不论看起来多“顺手有用”（转写纯文本、额外截图、汇总文档等）——一律不生成或删除。这条规则不针对某一种具体格式，凡是没在表里出现的都不留。
 - [ ] 原始转写、草稿、WAV、联系表、检查 JSON 全部只在临时目录，不出现在审核目录或视频目录。
 - [ ] 说明删了哪些长气口、哪些重复口播。**不要在此时制作最终字幕，更不要烧录。**
+- [ ] 同时给出简洁耗时账本：端到端总耗时、可测命令墙钟时间、人工/语义判断与工具调度差额、各主要阶段和每次重试。高耗时点须说明其工作量或证据依据；若发生异常，说明已采用的低成本回退和沉淀到何处。
 
 用户把粗剪视频导入剪映进行人工精剪，检查误剪、节奏、画面与转场；完成后导出一个时间轴锁定的 MP4（或完全同时间轴的音频）并交给阶段 B。
 

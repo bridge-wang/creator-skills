@@ -53,3 +53,14 @@ CTO	cto|Cto	always		职务缩写，恒大写
 CFO	cfo|Cfo	always		职务缩写，恒大写
 COO	coo|Coo	always		职务缩写，恒大写
 Stack Overflow	stack overflow|Stack overflow|stackoverflow|Stackoverflow	always		产品/站点固定写法
+SRT	srt	always		字幕文件格式缩写，恒大写
+Python	python	always		编程语言固定写法
+Whisper	whisper	always		语音识别模型固定写法
+Markdown	markdown	always		文档格式固定写法
+YouTube Download	YouTube download|youtube download	always		课程中提到的第三方库固定写法
+自我纠错能力	自我纠缩能力|自我纠纵能力|自我纠送能力	always		课程口播中 Agent 核心能力的常见误识别
+一次性	一丝性	always		常见同音误识别
+单独再写	单独在写	contextual	脚本|代码|Python|搜索	编程操作语境下“再写”的同音误识别
+时间戳	时间说|时间车	contextual	字幕|SRT|视频|定位|金句|配了|丢失	字幕时间戳的常见误识别
+主讲人	竹架人	always		课程与访谈语境常见误识别
+预埋好关键的检查节点	预买好关键的检查节点	always		工作流检查节点固定表述
