@@ -77,6 +77,7 @@ def silence_intervals(media: Path, threshold: str, minimum_duration: float) -> l
     result = subprocess.run(
         [
             "ffmpeg", "-nostdin", "-hide_banner", "-i", str(media),
+            "-vn",
             "-af", f"silencedetect=n={threshold}:d={minimum_duration}",
             "-f", "null", "-",
         ],

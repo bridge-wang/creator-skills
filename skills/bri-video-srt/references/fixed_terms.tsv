@@ -22,7 +22,7 @@ Stable Diffusion	stable diffusion|Stable diffusion	always		产品固定写法
 Sora	sora|SORA	contextual	视频|生成|模型|OpenAI|AI	产品固定写法
 MacBook	Macbook|macbook	always		产品固定写法
 Mac mini	Mac Mini|mac mini	always		产品固定写法
-Chatbot	Chatboard|ChatBot|Chatboat|chatbot|拆得购的	always		聊天机器人产品形态固定写法
+Chatbot	Chatboard|ChatBot|Chatboat|chatbot|chadeboard|拆得购的	always		聊天机器人产品形态固定写法
 GPT	GBT	always		模型缩写固定写法
 Opus	OPAS	always		Anthropic 模型系列固定写法
 豆包	多包|多巴|都包	always		AI 产品固定写法及常见误识别
@@ -64,3 +64,5 @@ YouTube Download	YouTube download|youtube download	always		课程中提到的第
 时间戳	时间说|时间车	contextual	字幕|SRT|视频|定位|金句|配了|丢失	字幕时间戳的常见误识别
 主讲人	竹架人	always		课程与访谈语境常见误识别
 预埋好关键的检查节点	预买好关键的检查节点	always		工作流检查节点固定表述
+免费额度	免费格度	always		软件免费使用额度的常见误识别
+趁手	衬手	contextual	键盘|工具|设备|电脑	工具使用语境下“趁手”的同音误识别
