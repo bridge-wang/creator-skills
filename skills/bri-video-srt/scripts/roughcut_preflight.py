@@ -5,6 +5,7 @@ prepare: 把人工/模型确认的重复口播候选吸附到真实长静音末�
 auto-editor 合并 cutlist 与一次性拼接音频预览。
 validate: 转写拼接预览后，验证每个切点左右语义锚点；失败即禁止 4K 导出。
 validate-final: 4K 成片重新转写后，再次验证所有左右语义锚点。
+preview-cutlist: 从已审核 kept_ranges 生成整片 PCM 音频预览，供返修重渲染前验收。
 """
 import argparse
 import json
@@ -13,6 +14,20 @@ import subprocess
 import unicodedata
 import wave
 from pathlib import Path
+
+
+SILENCE_MERGE_GAP_SECONDS = 0.06
+
+
+def merge_silences(events, max_gap=SILENCE_MERGE_GAP_SECONDS):
+    """只合并检测器造成的微小断裂，不能跨过一个可能存在的低声句首。"""
+    merged = []
+    for start, end in events:
+        if merged and start - merged[-1][1] <= max_gap:
+            merged[-1][1] = end
+        else:
+            merged.append([start, end])
+    return merged
 
 
 def detect_silences(media):
@@ -30,13 +45,7 @@ def detect_silences(media):
         elif end and current is not None:
             events.append([current, float(end.group(1))])
             current = None
-    merged = []
-    for start, end in events:
-        if merged and start - merged[-1][1] <= 0.55:
-            merged[-1][1] = end
-        else:
-            merged.append([start, end])
-    return merged
+    return merge_silences(events)
 
 
 def resolve_ranges(candidates, intervals):
@@ -56,9 +65,15 @@ def resolve_ranges(candidates, intervals):
         # 更早的长停顿，第三课实测即因此多跑了一轮预检。
         distance, negative_duration, silence_start, silence_end = min(nearby)
         duration = -negative_duration
+        # silencedetect 的尾点可能晚于低声句首。主动保留一段前卷，既保护
+        # “所以说”“第一个”等短引导词，也让预览切点与最终切点保持一致。
+        retain_preroll = float(item.get("retain_preroll", 0.46))
+        discard_end = max(silence_start, silence_end - retain_preroll)
         resolved.append({
             **item,
-            "discard_end": round(silence_end, 6),
+            "discard_end": round(discard_end, 6),
+            "detected_silence_end": round(silence_end, 6),
+            "retain_preroll": round(retain_preroll, 6),
             "snap_distance": round(silence_end - hint, 6),
             "snap_selection": "nearest_end_then_longest",
             "supporting_silence": {
@@ -125,6 +140,8 @@ def write_preview(source_wav, target_wav, resolved):
             "id": item["id"], "preview_start": round(cursor, 6),
             "preview_end": round(cursor + duration, 6),
             "left_anchors": item["left_anchors"], "right_anchors": item["right_anchors"],
+            "phrase_counts": item.get("phrase_counts", []),
+            "join_time": round(cursor + len(left) / width / rate, 6),
         })
         chunks.extend([segment, separator])
         cursor += duration + 0.8
@@ -132,6 +149,27 @@ def write_preview(source_wav, target_wav, resolved):
         writer.setparams(params)
         writer.writeframes(b"".join(chunks))
     return mapping
+
+
+def write_kept_preview(source_wav, target_wav, cutlist):
+    """按最终 kept_ranges 拼接 PCM16 音频，避免先付出整片 4K 编码成本。"""
+    with wave.open(str(source_wav), "rb") as reader:
+        params = reader.getparams()
+        if params.nchannels != 1 or params.sampwidth != 2:
+            raise SystemExit("preview source must be mono PCM16")
+        frames = reader.readframes(params.nframes)
+    rate = params.framerate
+    frame_width = params.sampwidth * params.nchannels
+    chunks = []
+    for item in cutlist.get("kept_ranges_seconds", []):
+        start = int(round(float(item["start"]) * rate)) * frame_width
+        end = int(round(float(item["end"]) * rate)) * frame_width
+        chunks.append(frames[start:end])
+    if not chunks:
+        raise SystemExit("cutlist 没有 kept_ranges_seconds")
+    with wave.open(str(target_wav), "wb") as writer:
+        writer.setparams(params)
+        writer.writeframes(b"".join(chunks))
 
 
 def seconds(value):
@@ -158,6 +196,51 @@ def anchors_in_text(text, anchors):
     return [normalized(anchor) for anchor in anchors if normalized(anchor) in text]
 
 
+def phrase_count_results(text, rules):
+    results = []
+    for rule in rules:
+        variants = [normalized(value) for value in rule.get("anchors", []) if normalized(value)]
+        counts = {variant: text.count(variant) for variant in variants}
+        count = max(counts.values(), default=0)
+        minimum = int(rule.get("min", 1))
+        maximum = int(rule.get("max", minimum))
+        results.append({
+            "anchors": rule.get("anchors", []), "count": count,
+            "min": minimum, "max": maximum,
+            "pass": minimum <= count <= maximum,
+        })
+    return results
+
+
+def find_tandem_repeats(text, allowed=None, min_length=6, max_length=40):
+    """找相邻的长短语复读；“很多很多”等短修辞不在自动拦截范围。"""
+    allowed = {normalized(value) for value in (allowed or [])}
+    issues = []
+    cursor = 0
+    while cursor < len(text):
+        largest = min(max_length, (len(text) - cursor) // 2)
+        match = None
+        for size in range(largest, min_length - 1, -1):
+            phrase = text[cursor:cursor + size]
+            if phrase == text[cursor + size:cursor + 2 * size] and phrase not in allowed:
+                match = phrase
+                break
+        if match:
+            issues.append({"offset": cursor, "text": match, "length": len(match)})
+            cursor += len(match) * 2
+        else:
+            cursor += 1
+    return issues
+
+
+def validate_candidate_text(text, item):
+    left = anchors_in_text(text, item["left_anchors"])
+    right = anchors_in_text(text, item["right_anchors"])
+    counts = phrase_count_results(text, item.get("phrase_counts", []))
+    count_ok = all(result["pass"] for result in counts)
+    return left, right, counts, count_ok
+
+
 def prepare(args):
     config = json.loads(Path(args.candidates).read_text(encoding="utf-8"))
     payload = json.loads(Path(args.auto_json).read_text(encoding="utf-8"))
@@ -170,7 +253,11 @@ def prepare(args):
     combined = apply_ranges(payload, numerator / denominator, resolved)
     Path(args.combined_json).write_text(json.dumps(combined, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     mapping = write_preview(args.wav, args.preview_wav, resolved)
-    Path(args.report).write_text(json.dumps({"resolved_ranges": resolved, "preview_mapping": mapping}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    Path(args.report).write_text(json.dumps({
+        "resolved_ranges": resolved,
+        "preview_mapping": mapping,
+        "allowed_tandem_repeats": config.get("allowed_tandem_repeats", []),
+    }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"resolved_ranges": resolved}, ensure_ascii=False, indent=2))
 
 
@@ -181,14 +268,18 @@ def validate_preview(args):
     for item in report["preview_mapping"]:
         text = normalized("".join(cue_text for start, end, cue_text in cues
                                   if item["preview_start"] <= (start + end) / 2 <= item["preview_end"]))
-        left = anchors_in_text(text, item["left_anchors"])
-        right = anchors_in_text(text, item["right_anchors"])
+        left, right, counts, count_ok = validate_candidate_text(text, item)
         results.append({"id": item["id"], "left_ok": bool(left), "right_ok": bool(right),
-                        "pass": bool(left) and bool(right)})
-    passed = all(result["pass"] for result in results)
-    report.update({"preflight_validation": results, "preflight_pass": passed})
+                        "phrase_counts": counts,
+                        "pass": bool(left) and bool(right) and count_ok})
+    full_text = normalized("".join(cue_text for _, _, cue_text in cues))
+    duplicates = find_tandem_repeats(full_text, report.get("allowed_tandem_repeats"))
+    passed = all(result["pass"] for result in results) and not duplicates
+    report.update({"preflight_validation": results, "tandem_repeats": duplicates,
+                   "preflight_pass": passed})
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"pass": passed, "results": results}, ensure_ascii=False, indent=2))
+    print(json.dumps({"pass": passed, "results": results,
+                      "tandem_repeats": duplicates}, ensure_ascii=False, indent=2))
     if not passed:
         raise SystemExit(1)
 
@@ -198,8 +289,7 @@ def validate_final(args):
     text = normalized("".join(cue_text for _, _, cue_text in parse_srt(args.srt)))
     results = []
     for item in config["candidates"]:
-        left_matches = anchors_in_text(text, item["left_anchors"])
-        right_matches = anchors_in_text(text, item["right_anchors"])
+        left_matches, right_matches, counts, count_ok = validate_candidate_text(text, item)
         pair_ok, distance = False, None
         for left in left_matches:
             left_position = text.find(left)
@@ -215,9 +305,12 @@ def validate_final(args):
         results.append({"id": item["id"], "left_ok": bool(left_matches),
                         "right_ok": bool(right_matches), "ordered_nearby_pair": pair_ok,
                         "intervening_normalized_chars": distance,
-                        "pass": bool(left_matches) and bool(right_matches) and pair_ok})
-    passed = all(result["pass"] for result in results)
-    print(json.dumps({"pass": passed, "results": results}, ensure_ascii=False, indent=2))
+                        "phrase_counts": counts,
+                        "pass": bool(left_matches) and bool(right_matches) and pair_ok and count_ok})
+    duplicates = find_tandem_repeats(text, config.get("allowed_tandem_repeats"))
+    passed = all(result["pass"] for result in results) and not duplicates
+    print(json.dumps({"pass": passed, "results": results,
+                      "tandem_repeats": duplicates}, ensure_ascii=False, indent=2))
     if not passed:
         raise SystemExit(1)
 
@@ -233,6 +326,14 @@ def main():
     preview_parser.add_argument("--preview-srt", required=True)
     preview_parser.add_argument("--report", required=True)
     preview_parser.set_defaults(func=validate_preview)
+    kept_parser = commands.add_parser("preview-cutlist")
+    kept_parser.add_argument("--wav", required=True)
+    kept_parser.add_argument("--cutlist", required=True)
+    kept_parser.add_argument("--preview-wav", required=True)
+    kept_parser.set_defaults(func=lambda args: write_kept_preview(
+        args.wav, args.preview_wav,
+        json.loads(Path(args.cutlist).read_text(encoding="utf-8")),
+    ))
     final_parser = commands.add_parser("validate-final")
     final_parser.add_argument("--srt", required=True)
     final_parser.add_argument("--candidates", required=True)

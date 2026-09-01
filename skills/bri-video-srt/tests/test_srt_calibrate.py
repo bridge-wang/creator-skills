@@ -6,6 +6,8 @@ from pathlib import Path
 
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "srt_calibrate.py"
+FIXED_TERMS = Path(__file__).parents[1] / "references" / "fixed_terms.tsv"
+PROTECTED_PHRASES = Path(__file__).parents[1] / "references" / "protected_phrases.txt"
 SPEC = importlib.util.spec_from_file_location("srt_calibrate", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 # srt_calibrate.py uses `from __future__ import annotations`, so its
@@ -113,6 +115,32 @@ class DanglingConnectorTests(unittest.TestCase):
         ]
         result = MODULE.apply_operations(cues, ops)
         self.assertFalse(result[0].text.endswith("、"))
+
+
+class LessonFiveVocabularyTests(unittest.TestCase):
+    def test_real_asr_errors_normalize_from_the_shared_error_log(self):
+        rules = MODULE.load_rules(FIXED_TERMS)
+        cues = [
+            MODULE.Cue(1, 0, 2000, "从道与数的角度来讲，前面更多讲的是数，也就是方法、技巧和工具"),
+            MODULE.Cue(2, 2000, 4000, "WorkerBody发现Snipe Paste解脱的快捷键失效了"),
+            MODULE.Cue(3, 4000, 6000, "健身训练时记录弹带课数、做了几组和没组几个"),
+            MODULE.Cue(4, 6000, 8000, "确诊了强制性脊柱炎"),
+            MODULE.Cue(5, 8000, 10000, "积累负利资产，做到知情合一，再填起一份问卷"),
+        ]
+        MODULE.apply_rules(cues, rules)
+        text = "\n".join(cue.text for cue in cues)
+        for expected in (
+            "道与术", "讲的是术", "WorkBuddy", "Snipaste", "截图",
+            "强直性脊柱炎", "弹力带克数", "每组几个", "复利资产",
+            "知行合一", "填写一份",
+        ):
+            self.assertIn(expected, text)
+
+    def test_lesson_five_fixed_phrases_are_protected(self):
+        rules = MODULE.load_rules(FIXED_TERMS)
+        phrases = MODULE.load_phrases(PROTECTED_PHRASES, rules)
+        for phrase in ("强直性脊柱炎", "弹力带克数", "道与术", "复利资产", "知行合一"):
+            self.assertIn(phrase, phrases)
 
 
 if __name__ == "__main__":

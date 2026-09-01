@@ -21,6 +21,25 @@ class AutocutTests(unittest.TestCase):
         retained_pause = (padded[0][1] - 2.0) + (4.0 - padded[1][0])
         self.assertAlmostEqual(retained_pause, 1.05)
 
+    def test_repeat_ranges_are_not_reintroduced_by_generic_padding(self):
+        padded = MODULE.add_benchmark_padding(
+            [(0.0, 2.0), (8.0, 10.0)], 10.0, 1.05, 0.17, 0.37,
+        )
+        final = MODULE.subtract_ranges_from_keep(padded, [(2.0, 8.0)])
+        self.assertEqual(final, [(0.0, 2.0), (8.0, 10.0)])
+
+    def test_emphasis_pause_ranges_are_merged_after_repeat_cut(self):
+        keep = [(0.0, 2.0), (8.0, 10.0)]
+        restored = MODULE.merge_intervals(keep + [(7.6, 8.0)])
+        self.assertEqual(restored, [(0.0, 2.0), (7.6, 10.0)])
+
+    def test_emphasis_plan_requires_audited_sentence_and_ranges(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "plan.json"
+            path.write_text(json.dumps({"audit_pass": False}), encoding="utf-8")
+            with self.assertRaises(SystemExit):
+                MODULE.load_emphasis_pause_plan(path)
+
     def test_progress_ignores_ffmpeg_na_and_invalid_values(self):
         self.assertIsNone(MODULE.parse_progress_seconds("out_time_ms", "N/A"))
         self.assertIsNone(MODULE.parse_progress_seconds("out_time_us", "nan"))
@@ -29,6 +48,14 @@ class AutocutTests(unittest.TestCase):
     def test_reuse_report_is_explicit(self):
         args = MODULE.parse_args(["source.mp4", "old.json", "new.mp4", "--reuse-report"])
         self.assertTrue(args.reuse_report)
+
+    def test_plan_only_requires_report(self):
+        with self.assertRaises(SystemExit):
+            MODULE.parse_args(["source.mp4", "cuts.json", "new.mp4", "--plan-only"])
+        args = MODULE.parse_args([
+            "source.mp4", "cuts.json", "new.mp4", "--plan-only", "--report", "plan.json",
+        ])
+        self.assertTrue(args.plan_only)
 
     def test_protected_ranges_must_reach_the_final_cutlist(self):
         payload = {"chunks": [[0, 60, 1.0], [60, 180, 99999.0], [180, 240, 1.0]]}

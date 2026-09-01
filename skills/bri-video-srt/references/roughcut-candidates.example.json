@@ -6,10 +6,18 @@
       "retain_hint": 76.42,
       "left_anchors": ["剪切前必须完整保留的语义短语"],
       "right_anchors": ["重说版本开头必须出现的语义短语"],
+      "phrase_counts": [
+        {
+          "anchors": ["最终成片只能出现一次的核心短语"],
+          "min": 1,
+          "max": 1
+        }
+      ],
       "left_context": 10.0,
       "right_context": 5.0,
       "snap_radius": 6.5,
       "min_supporting_silence": 1.0,
+      "retain_preroll": 0.46,
       "max_intervening_chars": 60
     }
   ]

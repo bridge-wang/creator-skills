@@ -7,8 +7,8 @@ ChatGPT	CHAT g b t|chat g b t|Chat GPT|chat gpt|chatgpt|re:\bchat\s*g\s*b\s*t\b	
 Codex	codex|CODEX	always		产品固定写法
 Claude	cloud|Cloud|克劳德|Claude AI	contextual	大模型|模型|AI|LLM|Anthropic|聊天|助手|智能体|代码|编程|上下文|token|推理|API	仅在大模型/Anthropic 语境中把 cloud 改为 Claude
 Claude Code	Claude code|claude code|cloudcode|CloudCode	always		产品固定写法及常见连写误识别
-WorkBuddy	Workbody|Workbuddy|workbuddy	always		AI 工具固定写法及常见误识别
-harness engineering	hest engineering|hes engineering|hones engineering|harmony engineering|harnes engineering|honeys engineering|harnessengineering|hestengineering|hesengineering|honesengineering|harmonyengineering|harnesengineering|honeysengineering	contextual	配套设施|工程|项目|模型|AI|agent|智能体|prompt|聊天框|工具脚本|文件|engineering	harness engineering 术语固定写法
+WorkBuddy	Workbody|WorkerBody|Workbuddy|workbuddy|workerbody	always		AI 工具固定写法及常见误识别
+harness engineering	Harness Engineering|hest engineering|hes engineering|hones engineering|harmony engineering|harnes engineering|honeys engineering|harnessengineering|hestengineering|hesengineering|honesengineering|harmonyengineering|harnesengineering|honeysengineering	contextual	配套设施|工程|项目|模型|AI|agent|智能体|prompt|聊天框|工具脚本|文件|engineering	harness engineering 术语固定写法
 harness	hest|hes|hones|harmony|harnes|honeys	contextual	harness engineering|engineering|配套设施|工程|项目|模型|AI|agent|智能体|prompt|聊天框|工具脚本|文件	harness engineering 相关常见误识别
 孙宇晨	孙雨辰|孙雨晨|孙宇辰	always		人名固定写法
 OpenAI	open ai|Open AI	always		机构固定写法
@@ -22,14 +22,15 @@ Stable Diffusion	stable diffusion|Stable diffusion	always		产品固定写法
 Sora	sora|SORA	contextual	视频|生成|模型|OpenAI|AI	产品固定写法
 MacBook	Macbook|macbook	always		产品固定写法
 Mac mini	Mac Mini|mac mini	always		产品固定写法
-Chatbot	Chatboard|ChatBot|Chatboat|chatbot|chadeboard|拆得购的	always		聊天机器人产品形态固定写法
+Snipaste	SnipePaste|Snipe Paste|Snap Paste|SnapPaste|snipaste|snipepaste	always		截图软件固定写法及常见误识别
+Chatbot	Chatboard|ChatBot|Chatboat|chatbot|chat vote|Chat Vote|chatvote|ChatVote|chadeboard|拆得购的	always		聊天机器人产品形态固定写法
 GPT	GBT	always		模型缩写固定写法
 Opus	OPAS	always		Anthropic 模型系列固定写法
 豆包	多包|多巴|都包	always		AI 产品固定写法及常见误识别
 豆包	东方	contextual	网页版|模型|回答|大模型|AI|助手|APP|应用|上传|发给|问一问|插件	"东方"是同音误听，仅在明显指向豆包产品的语境下替换，避免误改真实的"东方"一词（如东方财富、东方卫视）
 豆包网页版	豆包网易版	always		AI 产品页面固定写法
 扣子空间	扣字空间|扣子空間	always		AI 应用平台固定写法
-大模型	大墓形|大模形|大墨型|大母型	always		大语言模型相关常见误识别
+大模型	大墓形|大模形|大墨型|大母型|大木型	always		大语言模型相关常见误识别
 预训练	运训练	contextual	大模型|模型|训练|AI|大母型	"运训练"是"预训练"的同音误听
 沙箱环境	沙香环境|杀箱环境	always		Agent 运行环境固定写法
 口播稿	口博稿|口报稿|口播搞	always		课程口播术语常见误识别
@@ -47,6 +48,7 @@ API	api|Api	always		技术缩写
 GPU	gpu|Gpu	always		技术缩写
 AGI	agi|Agi	always		技术缩写
 AI	ai|Ai	always		技术缩写，恒大写
+AI	AH	contextual	聊天|聊一聊|Agent|模型|工具|助手|智能体	课程口播中 AI 的字母误识别
 Agent	agent|AGENT	always		智能体术语固定写法
 CEO	ceo|Ceo	always		职务缩写，恒大写
 CTO	cto|Cto	always		职务缩写，恒大写
@@ -66,3 +68,21 @@ YouTube Download	YouTube download|youtube download	always		课程中提到的第
 预埋好关键的检查节点	预买好关键的检查节点	always		工作流检查节点固定表述
 免费额度	免费格度	always		软件免费使用额度的常见误识别
 趁手	衬手	contextual	键盘|工具|设备|电脑	工具使用语境下“趁手”的同音误识别
+奇点	几点|基点	contextual	突破|编程能力|Agent|大模型	“突破了几点/基点”在大模型编程能力语境中是“突破了奇点”的误识别
+截图	截脱|解脱	contextual	快捷键|截屏|屏幕|Snipaste	截图软件语境中的同音误识别
+校验	教验	contextual	标准|事后|结果|验收	任务标准语境中的同音误识别
+强直性脊柱炎	强制性脊柱炎|强直性脊椎炎|强制性脊椎炎	always		疾病名称固定写法
+久坐	酒坐	contextual	睡觉|酒精|腰痛|症状|记录	健康记录语境中的同音误识别
+引体向上	引起向上	contextual	健身|训练|成长	健身动作固定写法
+弹力带克数	弹带课数	contextual	训练|引体向上|几组	训练记录语境中的同音误识别
+每组几个	没组几个	contextual	几组|训练|引体向上	训练组数语境中的同音误识别
+配套服务	配奏服务	contextual	模型|工具|harness|Agent	模型配套设施语境中的同音误识别
+最初是	最初使	always		“最初是”的常见同音错字
+看中间的可信节点	换中间的可信节点	always		Agent 执行监督语境中的常见同音误识别
+复利资产	负利资产	always		工作流经验沉淀语境中的常见同音误识别
+知行合一	知情合一	always		课程总结语境中的常见同音误识别
+填写一份	填起一份	always		问卷填写语境中的常见同音误识别
+APP	app|App	always		应用程序缩写固定写法
+Apps	apps	always		Codex 功能名称固定写法
+道与术	道与数	contextual	方法|技巧|工具|课程|前面几节课	课程框架中“道与术”的同音误识别
+讲的是术	讲的是数	contextual	方法|技巧|工具|课程|前面几节课	课程框架中“术”的同音误识别
