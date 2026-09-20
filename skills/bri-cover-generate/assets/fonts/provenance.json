@@ -1,0 +1,22 @@
+{
+  "repository": "https://github.com/adobe-fonts/source-han-serif",
+  "commit": "7889f11bf31170b5d092a083b357c8c8130f89e0",
+  "retrieved_date": "2026-09-20",
+  "license": "SIL Open Font License 1.1",
+  "files": [
+    {
+      "file": "LICENSE.txt",
+      "source": "https://raw.githubusercontent.com/adobe-fonts/source-han-serif/7889f11bf31170b5d092a083b357c8c8130f89e0/LICENSE.txt",
+      "sha256": "9ff5bb567e1b92c801fc1069e5fbf992ff8efccacb9db94e5959a5b3ba9bb903",
+      "bytes": 4463,
+      "retained_locally": true
+    },
+    {
+      "file": "SourceHanSerifSC-Bold.otf",
+      "source": "https://raw.githubusercontent.com/adobe-fonts/source-han-serif/7889f11bf31170b5d092a083b357c8c8130f89e0/OTF/SimplifiedChinese/SourceHanSerifSC-Bold.otf",
+      "sha256": "706b8c0de2deff6cbc0c87e2cdedfd33a78b7ffd76cebb4549012f197ba611fe",
+      "bytes": 25521732,
+      "retained_locally": true
+    }
+  ]
+}

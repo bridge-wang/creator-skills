@@ -1,0 +1,82 @@
+{
+  "font_family": "Source Han Serif SC",
+  "font_style": "Bold",
+  "font_sha256": "706b8c0de2deff6cbc0c87e2cdedfd33a78b7ffd76cebb4549012f197ba611fe",
+  "license_sha256": "9ff5bb567e1b92c801fc1069e5fbf992ff8efccacb9db94e5959a5b3ba9bb903",
+  "icc_sha256": "52e7e76479a9b026d89ebcf497a4da1ada868c0c438dcd2c4469f2389d76d493",
+  "black_overlay_opacity": 0.55,
+  "text_color": "#FFFFFF",
+  "letter_spacing_em": 0.06578947368421052,
+  "cjk_latin_extra_spacing_em": 0.1,
+  "ink_line_gap_ratio": 0.5,
+  "title_center": [
+    0.5,
+    0.5
+  ],
+  "variants": [
+    {
+      "ratio": "3x4",
+      "size": [
+        1440,
+        1920
+      ],
+      "background": "single",
+      "font_size_px": null,
+      "max_title_width_ratio": 0.76,
+      "max_title_height_ratio": 0.32,
+      "crop_anchor": [
+        0.5,
+        0.5
+      ]
+    },
+    {
+      "ratio": "9x16",
+      "size": [
+        1080,
+        1920
+      ],
+      "background": "single",
+      "font_size_px": null,
+      "max_title_width_ratio": 0.76,
+      "max_title_height_ratio": 0.32,
+      "crop_anchor": [
+        0.5,
+        0.5
+      ]
+    },
+    {
+      "ratio": "16x9",
+      "size": [
+        1920,
+        1080
+      ],
+      "background": "auto_landscape",
+      "font_size_px": null,
+      "max_title_width_ratio": 0.56,
+      "max_title_height_ratio": 0.44,
+      "crop_anchor": [
+        0.5,
+        0.15
+      ]
+    },
+    {
+      "ratio": "4x3",
+      "size": [
+        1440,
+        1080
+      ],
+      "background": "auto_landscape",
+      "font_size_px": null,
+      "max_title_width_ratio": 0.75,
+      "max_title_height_ratio": 0.44,
+      "crop_anchor": [
+        0.5,
+        0.15
+      ]
+    }
+  ],
+  "font_file": "fonts/SourceHanSerifSC-Bold.otf",
+  "license_file": "fonts/LICENSE.txt",
+  "icc_file": "sRGB.icc",
+  "schema_version": 1
+}

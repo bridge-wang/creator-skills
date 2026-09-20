@@ -1,0 +1,4 @@
+interface:
+  display_name: "bri-cover-generate"
+  short_description: "从无字幕视频生成三张宋体封面候选，选定后输出四种比例并保留复现依据"
+  default_prompt: "使用 $bri-cover-generate，根据我的无字幕视频和封面文字生成三张候选，等我选定后制作四比例封面。"

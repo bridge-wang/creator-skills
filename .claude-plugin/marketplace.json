@@ -5,7 +5,7 @@
   },
   "metadata": {
     "description": "Bridge 的创作者工具箱 — 自媒体创作流程中沉淀下来的 Skills，持续增加中",
-    "version": "2.2.0"
+    "version": "2.3.0"
   },
   "plugins": [
     {
@@ -27,6 +27,24 @@
       ],
       "skills": [
         "./skills/bri-video-srt"
+      ]
+    },
+    {
+      "name": "bri-cover-generate",
+      "description": "无字幕视频封面：先筛选三个真实画面并制作候选，用户选定后输出四种比例。支持 1–4 行标题，默认 55% 黑色遮罩与已核验的思源宋体 Bold，保留复现参数和字体许可。",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "design",
+      "keywords": [
+        "video",
+        "cover",
+        "thumbnail",
+        "typography",
+        "chinese"
+      ],
+      "skills": [
+        "./skills/bri-cover-generate"
       ]
     }
   ]
