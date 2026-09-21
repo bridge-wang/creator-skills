@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="480" viewBox="0 0 1200 480" role="img" aria-label="creator-tools 从终端安装到 Agent 调用的步骤示意">
+<rect width="1200" height="480" rx="24" fill="#F5F7FB"/>
+<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#8294AC"/></marker></defs>
+<text x="56" y="65" fill="#24344B" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="34" font-weight="600">安装 → 回到 Agent → 提供素材</text>
+<text x="56" y="104" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="21" font-weight="400">步骤示意；命令对应当前公开仓库。</text>
+<rect x="56" y="144" width="1088" height="100" rx="14" fill="#16243B"/>
+<text x="80" y="182" fill="#9CB4D9" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="18" font-weight="400">终端</text>
+<text x="80" y="221" fill="#F2F6FC" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="25" font-weight="400">npx -y skills add bridge-wang/creator-skills -g --all</text>
+<rect x="56" y="292" width="326" height="125" rx="16" fill="#FFFFFF" stroke="#DCE3EE"/>
+<rect x="56" y="312" width="5" height="85" rx="2" fill="#2563EB"/>
+<text x="78" y="332" fill="#24344B" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="25" font-weight="600">1. 安装所需 Skill</text>
+<text x="78" y="367" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">安装全部或指定一个入口</text>
+<rect x="437" y="292" width="326" height="125" rx="16" fill="#FFFFFF" stroke="#DCE3EE"/>
+<rect x="437" y="312" width="5" height="85" rx="2" fill="#2563EB"/>
+<text x="459" y="332" fill="#24344B" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="25" font-weight="600">2. 回到 Agent</text>
+<text x="459" y="367" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">提供视频、字幕或文字</text>
+<rect x="818" y="292" width="326" height="125" rx="16" fill="#FFFFFF" stroke="#DCE3EE"/>
+<rect x="818" y="312" width="5" height="85" rx="2" fill="#2563EB"/>
+<text x="840" y="332" fill="#24344B" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="25" font-weight="600">3. 检查结果</text>
+<text x="840" y="367" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">审核粗剪或选择封面</text>
+<path d="M390,352 L424,352" fill="none" stroke="#8294AC" stroke-width="2.5" marker-end="url(#arrow)"/>
+<path d="M771,352 L805,352" fill="none" stroke="#8294AC" stroke-width="2.5" marker-end="url(#arrow)"/>
+</svg>

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="540" viewBox="0 0 1200 540" role="img" aria-label="公开规则和资源转化为可复现创作流程与本地结果">
+<rect width="1200" height="540" rx="24" fill="#F5F7FB"/>
+<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#8294AC"/></marker></defs>
+<text x="56" y="72" fill="#24344B" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="36" font-weight="600">规则有来源，结果有记录</text>
+<text x="56" y="116" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="23" font-weight="400">公开的规范与资源，进入各 Skill 的执行和检查过程。</text>
+<rect x="56" y="184" width="326" height="237" rx="16" fill="#FFFFFF" stroke="#DCE3EE"/>
+<rect x="56" y="204" width="5" height="197" rx="2" fill="#2563EB"/>
+<text x="78" y="224" fill="#24344B" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="25" font-weight="600">公开依据</text>
+<text x="78" y="259" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">字幕校准规则与词表</text>
+<text x="78" y="287" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">中文文案排版指北</text>
+<text x="78" y="315" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">思源宋体与完整许可</text>
+<rect x="437" y="184" width="326" height="237" rx="16" fill="#FFFFFF" stroke="#DCE3EE"/>
+<rect x="437" y="204" width="5" height="197" rx="2" fill="#2563EB"/>
+<text x="459" y="224" fill="#24344B" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="25" font-weight="600">执行与检查</text>
+<text x="459" y="259" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">Skill 说明 + 按需资料</text>
+<text x="459" y="287" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">脚本完成媒体处理</text>
+<text x="459" y="315" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">检查文字、画面与边界</text>
+<rect x="818" y="184" width="326" height="237" rx="16" fill="#FFFFFF" stroke="#DCE3EE"/>
+<rect x="818" y="204" width="5" height="197" rx="2" fill="#2563EB"/>
+<text x="840" y="224" fill="#24344B" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="25" font-weight="600">本地产物</text>
+<text x="840" y="259" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">视频 / SRT / 封面 / 文稿</text>
+<text x="840" y="287" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">必要的审核材料</text>
+<text x="840" y="315" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">选定帧、参数与结果清单</text>
+<path d="M390,302 L424,302" fill="none" stroke="#8294AC" stroke-width="2.5" marker-end="url(#arrow)"/>
+<path d="M771,302 L805,302" fill="none" stroke="#8294AC" stroke-width="2.5" marker-end="url(#arrow)"/>
+<text x="56" y="485" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="22" font-weight="400">通用示例公开阅读；个人素材与任务文件保留在你的工作目录。</text>
+</svg>
