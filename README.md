@@ -2,9 +2,9 @@
 
 把自媒体创作里重复、繁琐、容易出错的环节，变成一句自然语言就能完成的事。
 
-creator-tools 由自媒体创作者 Bridge 创建，收录其在真实创作流程（选题、拍摄、剪辑、字幕、封面）中沉淀并反复打磨过的 AI Skills。每个 Skill 独立可用、互不依赖。当前发布 2 个 Skill，持续增加中。
+creator-tools 由自媒体创作者 Bridge 创建，收录其在真实创作流程（选题、拍摄、剪辑、字幕、封面）中沉淀并反复打磨过的 AI Skills。每个 Skill 独立可用、互不依赖。当前发布 3 个 Skill，持续增加中。
 
-**最新版本：v2.3.1**
+**最新版本：v2.4.0**
 
 ## 你可以用它做什么
 
@@ -14,6 +14,7 @@ creator-tools 由自媒体创作者 Bridge 创建，收录其在真实创作流�
 | 一个已经人工精剪、时间轴锁定的视频或音频 | 本地 Whisper 重转录 → 术语/语义校准 → 音频重锚定 → 中文排版，得到最终 SRT |
 | 一份现成的 SRT 字幕 | 修错别字和专名、按语义合并/重切字幕、微调时间戳 |
 | 一条无字幕视频和 1–4 行封面文字 | 筛选三个真实画面并制作封面候选；选定后生成 3:4、9:16、16:9、4:3 四比例成品 |
+| 一段中文或中英混排文字 | 保留原文措辞，规范空格、标点、组合加号和范围波浪线 |
 
 音视频的转录、抽帧和封面渲染均在本地运行。Agent 查看候选图时，图片如何传给模型取决于所用客户端及模型配置。
 
@@ -46,6 +47,12 @@ npx -y skills add bridge-wang/creator-skills -g --all
 npx -y skills add bridge-wang/creator-skills -g --skill bri-cover-generate -y
 ```
 
+只安装中文排版 Skill：
+
+```bash
+npx -y skills add bridge-wang/creator-skills -g --skill bri-chinese-typeset -y
+```
+
 安装到当前项目并指定 Codex：
 
 ```bash
@@ -58,6 +65,7 @@ npx -y skills add bridge-wang/creator-skills --skill bri-cover-generate --agent 
 claude plugin marketplace add bridge-wang/creator-skills
 claude plugin install bri-video-srt@creator-tools
 claude plugin install bri-cover-generate@creator-tools
+claude plugin install bri-chinese-typeset@creator-tools
 ```
 
 ## 依赖
@@ -90,12 +98,17 @@ python3 skills/bri-cover-generate/scripts/cover_pipeline.py doctor
 
 字体文件与完整许可已内置，约 25 MB，运行时无需联网下载字体。当前输入以无硬字幕、SDR、方形像素视频为主；HDR 等特殊输入需先明确转换方式。
 
+### 中文文案排版
+
+只需要支持 Skill 的 Agent，不依赖 Python、Node.js、外部 API 或本地模型。正常排版直接处理你提供的文字，不主动联网；首次通过 skills CLI 安装时需要 Node.js／npx。
+
 ## Skill 目录
 
 | Skill | 做什么 | 直接调用 |
 |---|---|---|
 | `bri-video-srt` | 两阶段视频工作流：未剪素材先粗剪并保护网页操作、输入、切页和模型等待；人工精剪锁定时间轴后，再生成最终 SRT。现成 SRT 可直接校准 | `/bri-video-srt <文件路径>`，或直接说「粗剪这个视频」「给精剪视频生成字幕」「校准这份字幕」 |
 | [bri-cover-generate](skills/bri-cover-generate/SKILL.md) | 真实抽帧、三张候选、选定后四比例封面。默认 65% 黑色遮罩、白色思源宋体 Bold，支持 1–4 行标题 | `$bri-cover-generate`，附无字幕视频路径和封面文字 |
+| [bri-chinese-typeset](skills/bri-chinese-typeset/SKILL.md) | 按《中文文案排版指北》保留内容地整理文字，组合加号两侧留空格，范围短横杠改为 `～` | `$bri-chinese-typeset`，或说「按中文排版指北排版」并附正文 |
 
 使用示例（安装后直接用自然语言）：
 
@@ -127,6 +140,25 @@ $bri-cover-generate
 
 已用真实视频跑通候选与四比例流程，并核对过已确认成品的像素一致性；不同视频的选帧和裁切仍需 Agent 查看画面。
 
+## 中文排版示例
+
+安装到当前项目的 Codex：
+
+```bash
+npx -y skills add bridge-wang/creator-skills --skill bri-chinese-typeset --agent codex -y --copy
+```
+
+```text
+$bri-chinese-typeset
+请排版：用检索+生成整理文档，预计4-6分钟。
+```
+
+结果：用检索 + 生成整理文档，预计 4～6 分钟。
+
+适用于纯文本及 Markdown 正文。保留原文内容、段落及结构，不润色、不纠正用词、不设计 PPT 或网页。只输出排版后的全文，只有要求保存时才写文件。加号间距和范围波浪线是本技能的补充约定；代码、公式、URL、日期、产品型号、英文连字符和正负号按用途保护。
+
+已完成结构校验及盲测留出／回归；本仓库不包含用户原始文案、测试答案和本地运行记录。复杂或存在歧义的记法优先保留原样。
+
 ## 自定义
 
 - **专名词表**：转录里反复出现你所在领域的专名误识别（人名、产品名）时，把它加进 `skills/bri-video-srt/references/fixed_terms.tsv`（格式见文件头注释），下次校准自动生效。
@@ -149,6 +181,7 @@ Agent 会重新拉取仓库并覆盖 `skills/` 下的同名目录；你在 `fixe
 claude plugin marketplace update creator-tools
 claude plugin update bri-video-srt@creator-tools
 claude plugin update bri-cover-generate@creator-tools
+claude plugin update bri-chinese-typeset@creator-tools
 ```
 
 ## 许可证

@@ -5,7 +5,7 @@
   },
   "metadata": {
     "description": "Bridge 的创作者工具箱 — 自媒体创作流程中沉淀下来的 Skills，持续增加中",
-    "version": "2.3.1"
+    "version": "2.4.0"
   },
   "plugins": [
     {
@@ -45,6 +45,23 @@
       ],
       "skills": [
         "./skills/bri-cover-generate"
+      ]
+    },
+    {
+      "name": "bri-chinese-typeset",
+      "description": "保留原文内容的中文文案排版：规范中英文、数字和单位间距，整理标点，组合加号两侧留空格，范围短横杠改为波浪线，保护代码与 Markdown 结构。",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "writing",
+      "keywords": [
+        "chinese",
+        "typography",
+        "markdown",
+        "writing"
+      ],
+      "skills": [
+        "./skills/bri-chinese-typeset"
       ]
     }
   ]

@@ -1,0 +1,4 @@
+interface:
+  display_name: "bri-chinese-typeset"
+  short_description: "按中文文案排版指北整理空格与标点，规范组合加号和范围波浪线"
+  default_prompt: "请用 $bri-chinese-typeset 排版下面的文字，保留原文内容，只输出排版后的全文。"
