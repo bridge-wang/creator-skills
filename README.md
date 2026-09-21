@@ -2,7 +2,7 @@
 
 简体中文
 
-> 面向自媒体创作者的中文 AI Skills 工具箱。把原始视频、字幕、封面文字和文稿交给 Agent，完成粗剪、字幕校准、多比例封面与中文排版。
+> 面向自媒体创作者的中文 AI Skills 工具箱。按「文字 → 封面 → 视频」组织创作流程，把文稿、封面素材和音视频交给 Agent，完成中文排版、多比例封面、视频粗剪与字幕校准。
 
 [![Version](https://img.shields.io/badge/version-2.4.0-2563EB.svg?style=flat-square)](VERSION)
 [![skills.sh](https://skills.sh/b/bridge-wang/creator-skills)](https://skills.sh/bridge-wang/creator-skills)
@@ -10,7 +10,7 @@
 
 **支持：Claude Code、Codex，以及其他支持 Skills 的 Agent。**
 
-creator-tools 由 [Bridge](https://github.com/bridge-wang) 创建，将自己学习 AI 和制作内容时反复使用的流程，整理成 3 个可直接调用的 Skills。每个 Skill 独立可用，覆盖视频粗剪、字幕校准、封面制作与文字排版。
+creator-tools 由 [Bridge](https://github.com/bridge-wang) 创建，将自己学习 AI 和制作内容时反复使用的流程，整理成 3 个可直接调用的 Skills。每个 Skill 独立可用，覆盖文字排版、封面制作、视频粗剪与字幕校准。
 
 **v2.4.0 更新：** 新增中文文案排版，统一中英文空格、组合加号与范围波浪线，保留原文措辞及代码结构。
 
@@ -20,47 +20,46 @@ creator-tools 由 [Bridge](https://github.com/bridge-wang) 创建，将自己学
 
 ## creator-tools 解决什么问题
 
-把当前的素材和想要的结果一起发给 Agent，就能从对应环节开始。原片先做粗剪，人工精剪完成后再生成最终字幕；封面先看候选再选定；文字排版直接返回整理后的全文。
+把当前的素材和想要的结果一起发给 Agent，就能从对应环节开始。文字排版直接返回整理后的全文；封面先看候选再选定；原片先做粗剪，人工精剪完成后再生成最终字幕。
 
 | 真实处境 | 你会得到 |
 | --- | --- |
+| 文稿里的中文、英文、数字和符号混在一起，排版不统一 | 保留原文措辞、可直接复制的排版结果 |
+| 一条视频要发多个平台，封面总要反复选帧和排字 | 3 张真实画面候选；选定后得到 4 种比例的封面 |
 | 口播录完了，气口和重说很多，又担心删掉必要的屏幕操作 | 粗剪视频、同步审核字幕和剪辑记录 |
 | 已经在剪辑软件里精剪完成，需要与当前画面对齐的字幕 | 校准、重锚定和排版后的独立 SRT |
 | 手里已有 SRT，但专名、错字和断句需要整理 | 校准后的 SRT；有同时间轴音频时可进一步核对时间 |
-| 一条视频要发多个平台，封面总要反复选帧和排字 | 3 张真实画面候选；选定后得到 4 种比例的封面 |
-| 文稿里的中文、英文、数字和符号混在一起，排版不统一 | 保留原文措辞、可直接复制的排版结果 |
 
 ## 快速开始
 
 安装完成后，直接在 Agent 中输入：
 
 ```text
-给这个无字幕视频做封面：/path/to/视频.mp4
-标题分两行：复杂的事情 · 从简单处开始
-先给我三张候选，选定后再生成四种比例。
+请只排版，不改写：
+这份API说明共12页，采用检索+生成方式整理，预计4-6分钟。
 ```
 
-Agent 会检查素材和已有工具，展示 A／B／C 三张候选。回复“选 B”后，它会生成 3:4、9:16、16:9、4:3 四张成品。需要调整时，继续说明标题、取景或样式要求。
+Agent 会保留原文措辞，统一中英文间距、组合加号和范围符号，返回：这份 API 说明共 12 页，采用检索 + 生成方式整理，预计 4～6 分钟。
 
 已经知道需求时，可以直接调用具体 Skill：
 
 ```text
+/bri-chinese-typeset 请排版：用检索+生成整理文档，预计4-6分钟。
+/bri-cover-generate 给这个无字幕视频做封面，标题是“先做出来·再慢慢改”：/path/to/视频.mp4
 /bri-video-srt 粗剪这条原始口播：/path/to/原片.mp4
 /bri-video-srt 视频已经精剪并锁定时间轴，请生成最终字幕：/path/to/成片.mp4
 /bri-video-srt 校准这份字幕的专名和断句：/path/to/字幕.srt
-/bri-cover-generate 给这个无字幕视频做封面，标题是“先做出来·再慢慢改”：/path/to/视频.mp4
-/bri-chinese-typeset 请排版：用检索+生成整理文档，预计4-6分钟。
 ```
 
 ## 能力一览
 
 | 工作目标 | 主要入口 | 常见产出 |
 | --- | --- | --- |
+| 整理中文或中英混排文稿 | `/bri-chinese-typeset` | 保留内容的排版全文，或按要求保存的文本文件 |
+| 从真实视频画面制作统一风格的多平台封面 | `/bri-cover-generate` | 3 张候选、选定后的 4 比例 PNG 与总览 |
 | 粗剪原始口播，检查气口、重说与必要操作画面 | `/bri-video-srt` | 粗剪视频、审核 SRT、剪辑时间记录 |
 | 为精剪且时间轴锁定的音视频生成字幕 | `/bri-video-srt` | 校准并对齐的最终 SRT |
 | 整理已有字幕的专名、文字与断句 | `/bri-video-srt` | 校准后的 SRT |
-| 从真实视频画面制作统一风格的多平台封面 | `/bri-cover-generate` | 3 张候选、选定后的 4 比例 PNG 与总览 |
-| 整理中文或中英混排文稿 | `/bri-chinese-typeset` | 保留内容的排版全文，或按要求保存的文本文件 |
 
 完整的 3 个 Skill、所需素材、运行依赖和使用边界，见 [新手入门与 Skill 全目录](docs/新手入门.md#skill-全目录)。
 
@@ -74,7 +73,7 @@ Agent 会检查素材和已有工具，展示 A／B／C 三张候选。回复“
 npx -y skills add bridge-wang/creator-skills -g --all
 ```
 
-安装后回到 Agent，把素材和需求一起发出，或直接输入 Skill 名称。通过这个命令安装需要 Node.js／npx；视频与封面的运行依赖见 [环境准备](docs/新手入门.md#环境准备)。
+安装后回到 Agent，把素材和需求一起发出，或直接输入 Skill 名称。通过这个命令安装需要 Node.js／npx；封面与视频的运行依赖见 [环境准备](docs/新手入门.md#环境准备)。
 
 ### Claude Code 插件市场
 
@@ -82,9 +81,9 @@ npx -y skills add bridge-wang/creator-skills -g --all
 
 ```bash
 claude plugin marketplace add bridge-wang/creator-skills
-claude plugin install bri-video-srt@creator-tools
-claude plugin install bri-cover-generate@creator-tools
 claude plugin install bri-chinese-typeset@creator-tools
+claude plugin install bri-cover-generate@creator-tools
+claude plugin install bri-video-srt@creator-tools
 ```
 
 当前市场提供 3 个独立插件，按需选择对应的安装命令。使用插件方式安装后，可在 Claude Code 的命令列表中选择相应 Skill。
@@ -102,7 +101,7 @@ claude plugin install bri-chinese-typeset@creator-tools
 请先检查并保留我修改过的词表、保护短语和任务文件。
 ```
 
-Agent 应先核对本地修改，再更新对应 Skill；视频、封面与文稿仍放在你的工作目录中。插件市场的更新命令见 [安装与更新](docs/新手入门.md#安装与更新)，版本变化见 [提交记录](https://github.com/bridge-wang/creator-skills/commits/main)。
+Agent 应先核对本地修改，再更新对应 Skill；文稿、封面与视频仍放在你的工作目录中。插件市场的更新命令见 [安装与更新](docs/新手入门.md#安装与更新)，版本变化见 [提交记录](https://github.com/bridge-wang/creator-skills/commits/main)。
 
 ## creator-tools 怎样工作
 
@@ -115,24 +114,24 @@ Agent 匹配对应 Skill，确认素材所处阶段
    ↓
 按流程生成阶段结果
    ↓
-需要时由你审核粗剪或选择封面
+检查排版，按需选择封面或审核粗剪
    ↓
-交付视频、字幕、封面或排版文字
+交付排版文字、封面、视频或字幕
 ```
 
-三个 Skill 可以分别使用，不要求从视频流程的第一步开始。粗剪结果需要人工精剪后才能进入最终字幕阶段；封面默认等你选定候选后再出四比例；文稿排版保留内容和原有结构。
+三个 Skill 按「文字 → 封面 → 视频」排列，也可以分别使用。文稿排版保留内容和原有结构；封面默认等你选定候选后再出四比例；粗剪结果需要人工精剪后才能进入最终字幕阶段。
 
 ## 规则资料与本地记录
 
-仓库公开了字幕校准规则、封面样式与字体依据、中文排版约定，以及用于执行和核对结果的脚本。
+仓库公开了中文排版约定、封面样式与字体依据、字幕校准规则，以及用于执行和核对结果的脚本。
 
+- 想了解文字排版及其保护边界，阅读 [排版规则](skills/bri-chinese-typeset/SKILL.md) 与 [结构保护说明](skills/bri-chinese-typeset/references/structured-text.md)。
+- 想调整封面取景与排字，阅读 [样式与构图规则](skills/bri-cover-generate/references/style-and-framing.md) 和 [字体来源与许可](skills/bri-cover-generate/references/font-license.md)。
 - 想统一字幕里的专名，查看 [固定术语表](skills/bri-video-srt/references/fixed_terms.tsv) 与 [保护短语表](skills/bri-video-srt/references/protected_phrases.txt)。
 - 想了解字幕怎样校准，阅读 [字幕校准说明](skills/bri-video-srt/references/calibration.md)。
-- 想调整封面取景与排字，阅读 [样式与构图规则](skills/bri-cover-generate/references/style-and-framing.md) 和 [字体来源与许可](skills/bri-cover-generate/references/font-license.md)。
-- 想了解文字排版及其保护边界，阅读 [排版规则](skills/bri-chinese-typeset/SKILL.md) 与 [结构保护说明](skills/bri-chinese-typeset/references/structured-text.md)。
-- 想继续上一次制作，保留本地交付和任务记录：粗剪审核文件位于素材的审核目录；封面使用 `job.json` 与成品清单记录选择和参数，详见 [复现工作流](skills/bri-cover-generate/references/workflow.md)。
+- 想继续上一次制作，保留本地交付和任务记录：封面使用 `job.json` 与成品清单记录选择和参数，详见 [复现工作流](skills/bri-cover-generate/references/workflow.md)；粗剪审核文件位于素材的审核目录。
 
-音视频转录、抽帧和封面渲染在本地执行。Agent 阅读文稿、字幕或候选图时，这些内容如何传给模型取决于所用客户端及模型配置。
+抽帧、封面渲染和音视频转录在本地执行。Agent 阅读文稿、候选图或字幕时，这些内容如何传给模型取决于所用客户端及模型配置。
 
 ## 公开工作流示例
 

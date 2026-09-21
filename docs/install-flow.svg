@@ -13,11 +13,11 @@
 <rect x="437" y="292" width="326" height="125" rx="16" fill="#FFFFFF" stroke="#DCE3EE"/>
 <rect x="437" y="312" width="5" height="85" rx="2" fill="#2563EB"/>
 <text x="459" y="332" fill="#24344B" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="25" font-weight="600">2. 回到 Agent</text>
-<text x="459" y="367" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">提供视频、字幕或文字</text>
+<text x="459" y="367" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">提供文字、标题或视频</text>
 <rect x="818" y="292" width="326" height="125" rx="16" fill="#FFFFFF" stroke="#DCE3EE"/>
 <rect x="818" y="312" width="5" height="85" rx="2" fill="#2563EB"/>
 <text x="840" y="332" fill="#24344B" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="25" font-weight="600">3. 检查结果</text>
-<text x="840" y="367" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">审核粗剪或选择封面</text>
+<text x="840" y="367" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">检查文字、选封面或审粗剪</text>
 <path d="M390,352 L424,352" fill="none" stroke="#8294AC" stroke-width="2.5" marker-end="url(#arrow)"/>
 <path d="M771,352 L805,352" fill="none" stroke="#8294AC" stroke-width="2.5" marker-end="url(#arrow)"/>
 </svg>

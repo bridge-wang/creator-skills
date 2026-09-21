@@ -9,24 +9,20 @@
   },
   "plugins": [
     {
-      "name": "bri-video-srt",
-      "description": "中文口播两阶段工作流：SKILL.md 改写为编号门禁清单，禁止跳步；粗剪前联合审计画面和语义，保护网页操作、输入、切换与模型等待，再验证重复口播切点并同步裁切音画；人工精剪锁定时间轴后，用本地 whisper.cpp 生成最终 SRT，交付前按白名单收口、错题自动写回词表。",
+      "name": "bri-chinese-typeset",
+      "description": "保留原文内容的中文文案排版：规范中英文、数字和单位间距，整理标点，组合加号两侧留空格，范围短横杠改为波浪线，保护代码与 Markdown 结构。",
       "source": "./",
       "strict": false,
-      "version": "2.2.0",
-      "category": "video-subtitles",
+      "version": "1.0.0",
+      "category": "writing",
       "keywords": [
-        "video",
-        "subtitle",
-        "srt",
-        "whisper",
-        "transcription",
-        "calibration",
-        "auto-editor",
-        "chinese"
+        "chinese",
+        "typography",
+        "markdown",
+        "writing"
       ],
       "skills": [
-        "./skills/bri-video-srt"
+        "./skills/bri-chinese-typeset"
       ]
     },
     {
@@ -48,20 +44,24 @@
       ]
     },
     {
-      "name": "bri-chinese-typeset",
-      "description": "保留原文内容的中文文案排版：规范中英文、数字和单位间距，整理标点，组合加号两侧留空格，范围短横杠改为波浪线，保护代码与 Markdown 结构。",
+      "name": "bri-video-srt",
+      "description": "中文口播两阶段工作流：SKILL.md 改写为编号门禁清单，禁止跳步；粗剪前联合审计画面和语义，保护网页操作、输入、切换与模型等待，再验证重复口播切点并同步裁切音画；人工精剪锁定时间轴后，用本地 whisper.cpp 生成最终 SRT，交付前按白名单收口、错题自动写回词表。",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
-      "category": "writing",
+      "version": "2.2.0",
+      "category": "video-subtitles",
       "keywords": [
-        "chinese",
-        "typography",
-        "markdown",
-        "writing"
+        "video",
+        "subtitle",
+        "srt",
+        "whisper",
+        "transcription",
+        "calibration",
+        "auto-editor",
+        "chinese"
       ],
       "skills": [
-        "./skills/bri-chinese-typeset"
+        "./skills/bri-video-srt"
       ]
     }
   ]

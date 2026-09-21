@@ -6,9 +6,9 @@
 <rect x="56" y="184" width="326" height="237" rx="16" fill="#FFFFFF" stroke="#DCE3EE"/>
 <rect x="56" y="204" width="5" height="197" rx="2" fill="#2563EB"/>
 <text x="78" y="224" fill="#24344B" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="25" font-weight="600">公开依据</text>
-<text x="78" y="259" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">字幕校准规则与词表</text>
-<text x="78" y="287" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">中文文案排版指北</text>
-<text x="78" y="315" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">思源宋体与完整许可</text>
+<text x="78" y="259" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">中文文案排版指北</text>
+<text x="78" y="287" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">思源宋体与完整许可</text>
+<text x="78" y="315" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">字幕校准规则与词表</text>
 <rect x="437" y="184" width="326" height="237" rx="16" fill="#FFFFFF" stroke="#DCE3EE"/>
 <rect x="437" y="204" width="5" height="197" rx="2" fill="#2563EB"/>
 <text x="459" y="224" fill="#24344B" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="25" font-weight="600">执行与检查</text>
@@ -18,9 +18,9 @@
 <rect x="818" y="184" width="326" height="237" rx="16" fill="#FFFFFF" stroke="#DCE3EE"/>
 <rect x="818" y="204" width="5" height="197" rx="2" fill="#2563EB"/>
 <text x="840" y="224" fill="#24344B" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="25" font-weight="600">本地产物</text>
-<text x="840" y="259" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">视频 / SRT / 封面 / 文稿</text>
-<text x="840" y="287" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">必要的审核材料</text>
-<text x="840" y="315" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">选定帧、参数与结果清单</text>
+<text x="840" y="259" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">文稿 / 封面 / 视频 / SRT</text>
+<text x="840" y="287" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">封面选定帧、参数与清单</text>
+<text x="840" y="315" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="20" font-weight="400">视频与字幕审核材料</text>
 <path d="M390,302 L424,302" fill="none" stroke="#8294AC" stroke-width="2.5" marker-end="url(#arrow)"/>
 <path d="M771,302 L805,302" fill="none" stroke="#8294AC" stroke-width="2.5" marker-end="url(#arrow)"/>
 <text x="56" y="485" fill="#53657E" font-family="system-ui, -apple-system, BlinkMacSystemFont, &quot;PingFang SC&quot;, &quot;Noto Sans CJK SC&quot;, sans-serif" font-size="22" font-weight="400">通用示例公开阅读；个人素材与任务文件保留在你的工作目录。</text>
