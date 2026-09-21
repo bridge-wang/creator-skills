@@ -16,7 +16,7 @@ creator-tools 由 [Bridge](https://github.com/bridge-wang) 创建，将自己学
 
 [快速开始](#快速开始) · [安装](#安装) · [能力一览](#能力一览) · [公开工作流示例](#公开工作流示例) · [完整使用手册](docs/新手入门.md) · [更新记录](https://github.com/bridge-wang/creator-skills/commits/main)
 
-![creator-tools 创作流程总览](docs/creator-workflow.svg)
+![creator-tools 创作流程总览](docs/creator-workflow-12a8343555a2.svg)
 
 ## creator-tools 解决什么问题
 
@@ -90,7 +90,7 @@ claude plugin install bri-video-srt@creator-tools
 
 只想通过 skills CLI 安装一个能力时，可使用 `npx -y skills add bridge-wang/creator-skills -g --skill bri-chinese-typeset -y`，将 Skill 名换成所需能力即可。
 
-![creator-tools 安装流程示意](docs/install-flow.svg)
+![creator-tools 安装流程示意](docs/install-flow-a5478b9fc113.svg)
 
 ### 更新
 
@@ -142,7 +142,7 @@ Agent 匹配对应 Skill，确认素材所处阶段
 
 示例与 Skills 的运行资源分开放置。安装器部署的是所选 Skill 目录；这两份阅读材料保留在仓库 `docs/` 中，可单独下载。示例不包含个人原始视频、私有文稿或开发测试答案。
 
-![creator-tools 规则与产物关系图](docs/rules-to-results.svg)
+![creator-tools 规则与产物关系图](docs/rules-to-results-26d4dbb53f28.svg)
 
 ## 共同贡献者
 
