@@ -4,7 +4,7 @@
 
 creator-tools 由自媒体创作者 Bridge 创建，收录其在真实创作流程（选题、拍摄、剪辑、字幕、封面）中沉淀并反复打磨过的 AI Skills。每个 Skill 独立可用、互不依赖。当前发布 2 个 Skill，持续增加中。
 
-**最新版本：v2.3.0**
+**最新版本：v2.3.1**
 
 ## 你可以用它做什么
 
@@ -95,7 +95,7 @@ python3 skills/bri-cover-generate/scripts/cover_pipeline.py doctor
 | Skill | 做什么 | 直接调用 |
 |---|---|---|
 | `bri-video-srt` | 两阶段视频工作流：未剪素材先粗剪并保护网页操作、输入、切页和模型等待；人工精剪锁定时间轴后，再生成最终 SRT。现成 SRT 可直接校准 | `/bri-video-srt <文件路径>`，或直接说「粗剪这个视频」「给精剪视频生成字幕」「校准这份字幕」 |
-| [bri-cover-generate](skills/bri-cover-generate/SKILL.md) | 真实抽帧、三张候选、选定后四比例封面。默认 55% 黑色遮罩、白色思源宋体 Bold，支持 1–4 行标题 | `$bri-cover-generate`，附无字幕视频路径和封面文字 |
+| [bri-cover-generate](skills/bri-cover-generate/SKILL.md) | 真实抽帧、三张候选、选定后四比例封面。默认 65% 黑色遮罩、白色思源宋体 Bold，支持 1–4 行标题 | `$bri-cover-generate`，附无字幕视频路径和封面文字 |
 
 使用示例（安装后直接用自然语言）：
 

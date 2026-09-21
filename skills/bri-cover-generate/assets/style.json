@@ -4,7 +4,7 @@
   "font_sha256": "706b8c0de2deff6cbc0c87e2cdedfd33a78b7ffd76cebb4549012f197ba611fe",
   "license_sha256": "9ff5bb567e1b92c801fc1069e5fbf992ff8efccacb9db94e5959a5b3ba9bb903",
   "icc_sha256": "52e7e76479a9b026d89ebcf497a4da1ada868c0c438dcd2c4469f2389d76d493",
-  "black_overlay_opacity": 0.55,
+  "black_overlay_opacity": 0.65,
   "text_color": "#FFFFFF",
   "letter_spacing_em": 0.06578947368421052,
   "cjk_latin_extra_spacing_em": 0.1,
