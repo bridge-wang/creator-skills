@@ -4,7 +4,7 @@
 
 > 面向自媒体创作者的中文 AI Skills 工具箱。按「文字 → 封面 → 视频」组织创作流程，把文稿、封面素材和音视频交给 Agent，完成中文排版、多比例封面、视频粗剪与字幕校准。
 
-[![Version](https://img.shields.io/badge/version-2.4.0-2563EB.svg?style=flat-square)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.5.0-2563EB.svg?style=flat-square)](VERSION)
 [![skills.sh](https://skills.sh/b/bridge-wang/creator-skills)](https://skills.sh/bridge-wang/creator-skills)
 [![License](https://img.shields.io/badge/license-MIT-16A34A.svg?style=flat-square)](LICENSE)
 
@@ -12,7 +12,7 @@
 
 creator-tools 由 [Bridge](https://github.com/bridge-wang) 创建，将自己学习 AI 和制作内容时反复使用的流程，整理成 3 个可直接调用的 Skills。每个 Skill 独立可用，覆盖文字排版、封面制作、视频粗剪与字幕校准。
 
-**v2.4.0 更新：** 新增中文文案排版，统一中英文空格、组合加号与范围波浪线，保留原文措辞及代码结构。
+**v2.5.0 更新：** 封面按行数与实际字宽适配排版，固定日期目录只交付五张图片；视频粗剪加入短／长视频节奏配置、全文语义审稿与更细的操作窗口验证。
 
 [快速开始](#快速开始) · [安装](#安装) · [能力一览](#能力一览) · [公开工作流示例](#公开工作流示例) · [完整使用手册](docs/新手入门.md) · [更新记录](https://github.com/bridge-wang/creator-skills/commits/main)
 
@@ -60,7 +60,7 @@ Agent 会保留原文措辞，统一中英文间距、组合加号和范围符�
 | 工作目标 | 主要入口 | 常见产出 |
 | --- | --- | --- |
 | 整理中文或中英混排文稿 | `/bri-chinese-typeset` | 保留内容的排版全文，或按要求保存的文本文件 |
-| 从真实视频画面制作统一风格的多平台封面 | `/bri-cover-generate` | 3 张候选、选定后的 4 比例 PNG 与总览 |
+| 从真实视频画面制作统一风格的多平台封面 | `/bri-cover-generate` | 3 张候选；选定后在 `M月D号-封面` 目录交付四比例图与总预览图，共五张图片 |
 | 粗剪原始口播，检查气口、重说与必要操作画面 | `/bri-video-srt` | 粗剪视频、审核 SRT、剪辑时间记录 |
 | 为精剪且时间轴锁定的音视频生成字幕 | `/bri-video-srt` | 校准并对齐的最终 SRT |
 | 整理已有字幕的专名、文字与断句 | `/bri-video-srt` | 校准后的 SRT |
@@ -133,7 +133,7 @@ Agent 匹配对应 Skill，确认素材所处阶段
 - 想调整封面取景与排字，阅读 [样式与构图规则](skills/bri-cover-generate/references/style-and-framing.md) 和 [字体来源与许可](skills/bri-cover-generate/references/font-license.md)。
 - 想统一字幕里的专名，查看 [固定术语表](skills/bri-video-srt/references/fixed_terms.tsv) 与 [保护短语表](skills/bri-video-srt/references/protected_phrases.txt)。
 - 想了解字幕怎样校准，阅读 [字幕校准说明](skills/bri-video-srt/references/calibration.md)。
-- 想继续上一次制作，保留本地交付和任务记录：封面使用 `job.json` 与成品清单记录选择和参数，详见 [复现工作流](skills/bri-cover-generate/references/workflow.md)；粗剪审核文件位于素材的审核目录。
+- 封面固定交付 `M月D号-封面` 目录，里面只有四张比例图与一张总预览图；完成后删除全部中间结果，详见 [五图交付工作流](skills/bri-cover-generate/references/workflow.md)。粗剪审核文件仍位于素材的审核目录。
 
 抽帧、封面渲染和音视频转录在本地执行。Agent 阅读文稿、候选图或字幕时，这些内容如何传给模型取决于所用客户端及模型配置。
 
@@ -146,7 +146,7 @@ Agent 匹配对应 Skill，确认素材所处阶段
 
 示例与 Skills 的运行资源分开放置。安装器部署的是所选 Skill 目录；这两份阅读材料保留在仓库 `docs/` 中，可单独下载。示例不包含个人原始视频、私有文稿或开发测试答案。
 
-![creator-tools 规则与产物关系图](docs/rules-to-results-26d4dbb53f28.svg)
+![creator-tools 规则与产物关系图](docs/rules-to-results-7a855b5750e6.svg)
 
 ## 共同贡献者
 

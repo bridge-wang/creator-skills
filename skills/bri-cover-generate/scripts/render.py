@@ -62,16 +62,27 @@ def line_mask(text, face, style):
     return mask.crop(bounds)
 
 
+def title_height_limit(lines, variant, style):
+    # A numeric task override also preserves the layout of older job snapshots.
+    explicit = variant.get('max_title_height_ratio')
+    if explicit is not None:
+        return explicit
+    return style['max_title_height_ratio_by_line_count'][str(len(lines))]
+
+
 def fit_title(lines, variant, style):
     width, height = variant['size']
+    height_limit = title_height_limit(lines, variant, style)
     best = None
     pinned = variant.get('font_size_px')
-    for size in ([pinned] if pinned else range(48, 401)):
+    # Keep legacy snapshots reproducible; new profiles allow short titles above 400 px.
+    maximum = 400 if style.get('schema_version', 1) < 2 else math.ceil(max(width, height))
+    for size in ([pinned] if pinned else range(48, maximum + 1)):
         masks = [line_mask(text, font(size), style) for text in lines]
         gap = round(max(m.height for m in masks) * style['ink_line_gap_ratio'])
         ink_height = sum(m.height for m in masks) + gap * (len(masks) - 1)
         if (max(m.width for m in masks) > width * variant['max_title_width_ratio'] or
-                ink_height > height * variant['max_title_height_ratio']):
+                ink_height > height * height_limit):
             if pinned:
                 raise ValueError('Pinned font size does not fit')
             break
@@ -129,6 +140,12 @@ def render(frame, lines, style, variant, path):
     canvas.save(path, icc_profile=(ASSETS / style['icc_file']).read_bytes())
     return {'ratio': variant['ratio'], 'size': [width, height], 'sha256': digest(path),
             'font_size_px': size, 'letter_spacing_px': size * style['letter_spacing_em'],
+            'letter_spacing_em': style['letter_spacing_em'],
+            'ink_line_gap_ratio': style['ink_line_gap_ratio'],
+            'title_block_height_px': total_height,
+            'title_max_width_px': max(m.width for m in masks),
+            'max_title_width_ratio': variant['max_title_width_ratio'],
+            'max_title_height_ratio': title_height_limit(lines, variant, style),
             'line_gap_px': gap, 'lines': boxes, 'background': mode,
             'background_crops': crops, 'black_overlay_opacity': style['black_overlay_opacity']}
 

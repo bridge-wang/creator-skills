@@ -10,6 +10,7 @@ import shutil
 import statistics
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 
 try:
@@ -17,6 +18,22 @@ try:
     from render import ASSETS, contact_sheet, digest, fit_title, load_style, render, verify_assets
 except ImportError as error:
     raise SystemExit(f'Required dependency missing: {error}. Use an existing Python with Pillow.')
+
+
+DELIVERY_SIZES = {'3x4': (1440, 1920), '9x16': (1080, 1920),
+                  '16x9': (1920, 1080), '4x3': (1440, 1080)}
+DELIVERY_NAMES = {f'封面-{ratio}.png' for ratio in DELIVERY_SIZES} | {'总预览图.jpg'}
+
+
+def delivery_path(video, supplied=None):
+    today = datetime.now().astimezone()
+    path = (Path(supplied).expanduser().absolute() if supplied else
+            Path(video).parent / f'{today.month}月{today.day}号-封面')
+    if not re.fullmatch(r'(?:[1-9]|1[0-2])月(?:[1-9]|[12][0-9]|3[01])号-封面', path.name):
+        raise ValueError('Delivery folder must be named M月D号-封面, for example 10月6号-封面')
+    if path.is_symlink():
+        raise ValueError('Delivery folder must not be a symlink')
+    return path.resolve()
 
 
 def emit(value):
@@ -219,23 +236,21 @@ def prepare(args):
     info = probe(video)
     if not 3 <= args.samples <= 60:
         raise ValueError('Sample count must be 3–60')
-    root = Path(args.out).expanduser().resolve() if args.out else video.with_name(video.stem + '-封面')
-    if root.exists():
-        raise ValueError('Output directory already exists; choose a new directory or resume its job.json')
-    root.mkdir(parents=True)
+    delivery = delivery_path(video, args.out)
+    if delivery.exists() and not args.replace:
+        raise ValueError('Delivery folder already exists; use --replace only for an authorized revision')
+    root = Path(tempfile.mkdtemp(prefix='bri-cover-work-')).resolve()
     job = {'schema': 'bri-cover-generate/1', 'created': datetime.now(timezone.utc).isoformat(),
+           'delivery_directory': str(delivery), 'replace_delivery': args.replace,
            'source_video': str(video), 'source_signature': signature(video), 'video': info,
            'raw_title': args.title, 'literal_middle_dot': args.literal_middle_dot,
            'title_lines': lines, 'style': load_style(), 'state': 'prepared', 'owned': {},
            'candidates': [], 'selected': None}
-    for name in ('LICENSE.txt', 'provenance.json'):
-        path = root / ('font-' + name)
-        shutil.copy2(ASSETS / 'fonts' / name, path)
-        track(job, root, path, 'evidence')
     save_job(root, job)
     times = [round(info['duration'] * (.03 + .94 * i / (args.samples - 1)), 3) for i in range(args.samples)]
     result = sample(job, root, times)
-    result.update(job=str(root / 'job.json'), title_lines=lines, video=info, state='prepared')
+    result.update(job=str(root / 'job.json'), delivery_directory=str(delivery),
+                  title_lines=lines, video=info, state='prepared')
     return result
 
 
@@ -298,7 +313,9 @@ def finalize(args):
     verify_assets(style, job['title_lines'])
     variants = copy.deepcopy(style['variants'])
     for variant in variants:
-        if variant['ratio'] in ('3x4', '9x16'):
+        if variant.get('crop_anchor_override') is not None:
+            variant['crop_anchor'] = variant['crop_anchor_override']
+        elif variant['ratio'] in ('3x4', '9x16'):
             variant['crop_anchor'] = record['portrait_anchor']
         elif args.landscape_anchor:
             variant['crop_anchor'] = args.landscape_anchor
@@ -324,39 +341,97 @@ def finalize(args):
     job.update(state='finalized', selected=record['label'], style=style,
                final_manifest=str(path.relative_to(root)), final_overview=str(sheet.relative_to(root)))
     save_job(root, job)
-    return {'state': job['state'], 'output_directory': str(directory), 'overview': str(sheet), 'covers': records}
+    return {'state': job['state'], 'review_directory': str(directory), 'overview': str(sheet),
+            'covers': records, 'next': 'Visually verify these images, then run deliver to export exactly five images and delete all working files.'}
+
+
+def deliver(args):
+    root, job = load_job(args.job)
+    if job['state'] != 'finalized':
+        raise ValueError('Delivery requires completed, visually verified final covers')
+    destination = delivery_path(job['source_video'], args.out or job.get('delivery_directory'))
+    if destination.is_relative_to(root) or root.is_relative_to(destination):
+        raise ValueError('Delivery and working directories must be separate')
+    if Path(job['source_video']).resolve().is_relative_to(root):
+        raise ValueError('Refusing to purge a working directory containing the source video')
+    # Only delete a complete, unmodified job inventory, including old revisions.
+    for path in root.rglob('*'):
+        relative = str(path.relative_to(root))
+        safe_path(root, relative)
+        if path.is_dir():
+            continue
+        if not path.is_file():
+            raise ValueError(f'Unexpected working file type: {relative}')
+        if relative == 'job.json' or path.name == '.DS_Store':
+            continue
+        meta = job['owned'].get(relative)
+        if not meta or digest(path) != meta['sha256']:
+            raise ValueError(f'Untracked or modified working file; resolve before delivery: {relative}')
+    manifest = json.loads(safe_path(root, job['final_manifest']).read_text())
+    if (len(manifest['covers']) != 4 or
+            {cover['ratio'] for cover in manifest['covers']} != set(DELIVERY_SIZES)):
+        raise ValueError('Delivery requires exactly the four standard ratios')
+    exports = []
+    for cover in manifest['covers']:
+        path = safe_path(root, cover['file'])
+        if digest(path) != cover['sha256']:
+            raise ValueError('Final cover changed or is missing; delivery stopped')
+        with Image.open(path) as image:
+            if image.size != DELIVERY_SIZES[cover['ratio']] or image.format != 'PNG':
+                raise ValueError('Final cover has incorrect dimensions or format')
+            image.verify()
+        exports.append((path, f"封面-{cover['ratio']}.png", cover['sha256']))
+    overview = safe_path(root, job['final_overview'])
+    if digest(overview) != job['owned'][job['final_overview']]['sha256']:
+        raise ValueError('Overview changed or is missing')
+    with Image.open(overview) as image:
+        if image.format != 'JPEG':
+            raise ValueError('Overview must be JPEG')
+        image.verify()
+    exports.append((overview, '总预览图.jpg', digest(overview)))
+    replace = args.replace or job.get('replace_delivery', False)
+    if destination.exists():
+        if not replace:
+            raise ValueError('Delivery folder already exists; explicit replacement is required')
+        if (not destination.is_dir() or {p.name for p in destination.iterdir()} != DELIVERY_NAMES or
+                any(not p.is_file() or p.is_symlink() for p in destination.iterdir())):
+            raise ValueError('Existing delivery folder contains unexpected files; no replacement performed')
+    report = {'output_directory': str(destination), 'files': sorted(DELIVERY_NAMES),
+              'working_directory_removed': str(root), 'applied': not args.dry_run}
+    if args.dry_run:
+        return report
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix='.bri-cover-export-', dir=destination.parent))
+    try:
+        for source_file, name, expected_hash in exports:
+            target = staging / name
+            shutil.copyfile(source_file, target)
+            if digest(target) != expected_hash:
+                raise ValueError('Export hash mismatch; working files retained')
+        backup = None
+        if destination.exists():
+            backup = Path(tempfile.mkdtemp(prefix='.bri-cover-old-', dir=destination.parent))
+            backup.rmdir()
+            destination.rename(backup)
+        try:
+            staging.rename(destination)
+        except OSError:
+            if backup is not None:
+                backup.rename(destination)
+            raise
+        if backup is not None:
+            shutil.rmtree(backup)
+        shutil.rmtree(root)
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging)
+    return report
 
 
 def cleanup(args):
-    root, job = load_job(args.job)
-    if job['state'] != 'finalized':
-        raise ValueError('Cleanup requires completed, verified final covers')
-    manifest = json.loads(safe_path(root, job['final_manifest']).read_text())
-    for cover in manifest['covers']:
-        if digest(safe_path(root, cover['file'])) != cover['sha256']:
-            raise ValueError('Final cover changed or is missing; cleanup stopped')
-    selected = next(c['raw'] for c in job['candidates'] if c['label'] == job['selected'])
-    planned, skipped = [], []
-    source_file = Path(job['source_video']).resolve()
-    for relative, meta in job['owned'].items():
-        if meta['role'] not in ('temporary', 'draft', 'raw') or relative == selected:
-            continue
-        path = safe_path(root, relative)
-        if path.resolve() == source_file:
-            raise ValueError('Refusing to remove the original video')
-        if not path.exists():
-            continue
-        if digest(path) != meta['sha256']:
-            skipped.append({'file': relative, 'reason': 'modified_since_generation'})
-            continue
-        planned.append(relative)
-    report = {'applied': args.apply, 'files': planned, 'skipped': skipped, 'kept_selected_frame': selected}
-    if args.apply:
-        for relative in planned:
-            safe_path(root, relative).unlink()
-        job.setdefault('cleanup_history', []).append(report)
-        save_job(root, job)
-    return report
+    # Backward-compatible command name; no longer keeps raw frames or metadata.
+    args.dry_run = not args.apply
+    return deliver(args)
 
 
 def main():
@@ -367,6 +442,7 @@ def main():
     prep.add_argument('--video', required=True)
     prep.add_argument('--title', required=True)
     prep.add_argument('--out')
+    prep.add_argument('--replace', action='store_true', help='Authorized revision of an existing five-image delivery')
     prep.add_argument('--samples', type=int, default=24)
     prep.add_argument('--literal-middle-dot', action='store_true')
     refine = commands.add_parser('sample', help='Inspect extra time points before choosing candidates')
@@ -384,8 +460,15 @@ def main():
     final.add_argument('--pick', required=True, choices=['A', 'B', 'C', 'a', 'b', 'c'])
     final.add_argument('--opacity', type=float)
     final.add_argument('--landscape-anchor', type=float, nargs=2)
-    clean = commands.add_parser('cleanup', help='Remove only tracked, unchanged intermediate files')
+    delivery = commands.add_parser('deliver', help='After visual review, export five images and delete all working files')
+    delivery.add_argument('--job', required=True)
+    delivery.add_argument('--out')
+    delivery.add_argument('--replace', action='store_true')
+    delivery.add_argument('--dry-run', action='store_true')
+    clean = commands.add_parser('cleanup', help='Compatibility alias for deliver; --apply exports and purges the whole job')
     clean.add_argument('--job', required=True)
+    clean.add_argument('--out')
+    clean.add_argument('--replace', action='store_true')
     clean.add_argument('--apply', action='store_true')
     status = commands.add_parser('status', help='Resume a saved job')
     status.add_argument('--job', required=True)
@@ -403,6 +486,8 @@ def main():
         result = finalize(args)
     elif args.command == 'cleanup':
         result = cleanup(args)
+    elif args.command == 'deliver':
+        result = deliver(args)
     else:
         _, result = load_job(args.job)
     emit(result)

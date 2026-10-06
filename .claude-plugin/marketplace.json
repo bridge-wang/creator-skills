@@ -5,7 +5,7 @@
   },
   "metadata": {
     "description": "Bridge 的创作者工具箱 — 自媒体创作流程中沉淀下来的 Skills，持续增加中",
-    "version": "2.4.0"
+    "version": "2.5.0"
   },
   "plugins": [
     {
@@ -27,10 +27,10 @@
     },
     {
       "name": "bri-cover-generate",
-      "description": "无字幕视频封面：先筛选三个真实画面并制作候选，用户选定后输出四种比例。支持 1–4 行标题，默认 65% 黑色遮罩与已核验的思源宋体 Bold，保留复现参数和字体许可。",
+      "description": "无字幕视频封面：先展示三个真实画面候选，选定后按实际字宽和行数适配四种比例。默认 65% 黑色遮罩与思源宋体 Bold；固定 M月D号-封面 目录只交付四张比例图和一张总预览图，完成后删除全部中间结果。",
       "source": "./",
       "strict": false,
-      "version": "1.0.1",
+      "version": "1.1.0",
       "category": "design",
       "keywords": [
         "video",
@@ -45,10 +45,10 @@
     },
     {
       "name": "bri-video-srt",
-      "description": "中文口播两阶段工作流：SKILL.md 改写为编号门禁清单，禁止跳步；粗剪前联合审计画面和语义，保护网页操作、输入、切换与模型等待，再验证重复口播切点并同步裁切音画；人工精剪锁定时间轴后，用本地 whisper.cpp 生成最终 SRT，交付前按白名单收口、错题自动写回词表。",
+      "description": "中文口播粗剪与字幕：独立全文语义审稿后核验原音，区分短视频约 0.308 秒与长视频 0.7 秒气口，保护必要操作的最小窗口，并验证剪辑计划与音画同步；时间轴锁定后使用本机统一 Whisper 生成、校准和重锚定独立 SRT。",
       "source": "./",
       "strict": false,
-      "version": "2.2.0",
+      "version": "2.3.0",
       "category": "video-subtitles",
       "keywords": [
         "video",
