@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "short_video": {
+    "max_pause_seconds": 0.3079690000000057,
+    "head_pad_seconds": 0.17,
+    "tail_pad_seconds": 0.37,
+    "emphasis_multiplier": 1.0,
+    "reference": {
+      "source_label": "用户手剪短视频示例 2026-09-20",
+      "measurement_sha256": "527090244979075470ce7d802040eb1ab50b5bd8d0ef618b5be6634c108c7a0d",
+      "pause_count": 84,
+      "mean_seconds": 0.31040925000000047,
+      "median_seconds": 0.3079690000000057,
+      "method": {
+        "sample_rate": 16000,
+        "sample_format": "PCM16",
+        "threshold_db": -35.0,
+        "min_silence_seconds": 0.12,
+        "merge_gap_seconds": 0.06,
+        "exclude_head_tail": true,
+        "definition": "可听口播之间的声学停顿，包含句间和短语间停顿；不是字幕时间差"
+      }
+    },
+    "scope": "用户的短视频口播偏好，不作为所有用户或课程视频的统一标准"
+  },
+  "long_video": {
+    "max_pause_seconds": 0.7,
+    "head_pad_seconds": 0.17,
+    "tail_pad_seconds": 0.37,
+    "emphasis_multiplier": 1.0,
+    "reference": {
+      "source_label": "用户明确指定的长视频气口标准 2026-09-20",
+      "basis": "explicit_user_preference"
+    },
+    "scope": "长视频与课程粗剪；较短气口不补长，必要实操窗口另行审核"
+  }
+}

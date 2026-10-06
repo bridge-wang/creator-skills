@@ -3,3 +3,4 @@ __pycache__/
 .DS_Store
 skills/bri-cover-generate/evals/
 skills/bri-chinese-typeset/evals/
+skills/bri-video-srt/evals/

@@ -47,9 +47,13 @@ Agent 会保留原文措辞，统一中英文间距、组合加号和范围符�
 /bri-chinese-typeset 请排版：用检索+生成整理文档，预计4-6分钟。
 /bri-cover-generate 给这个无字幕视频做封面，标题是“先做出来·再慢慢改”：/path/to/视频.mp4
 /bri-video-srt 粗剪这条原始口播：/path/to/原片.mp4
+/bri-video-srt 短视频模式粗剪：/path/to/短视频.mp4
+/bri-video-srt 长视频模式粗剪：/path/to/课程.mp4
 /bri-video-srt 视频已经精剪并锁定时间轴，请生成最终字幕：/path/to/成片.mp4
 /bri-video-srt 校准这份字幕的专名和断句：/path/to/字幕.srt
 ```
+
+短视频模式的普通气口目标约为 0.308 秒，长视频与课程模式为 0.7 秒；仅压缩超过目标的气口，较短气口不补长，两种模式默认不额外加长强调停顿。具体数值与执行规则见 [节奏配置](skills/bri-video-srt/references/pacing-profiles.json) 和 [节奏说明](skills/bri-video-srt/references/pacing.md)。
 
 ## 能力一览
 

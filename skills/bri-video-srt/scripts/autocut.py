@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""色彩保真删气口：按声音区间补回留白后，只执行一次 4K 重编码。
+"""色彩保真删气口：按声音区间补回留白后，只执行一次 视频重编码。
 
 用法：autocut.py <input.MOV> <cutlist_v1.json> <output.mp4> [留白参数]
 输出保持源视频的 pix_fmt / color_primaries / color_trc / colorspace 不变。
@@ -25,13 +25,17 @@ def parse_args(argv=None):
     parser.add_argument("src")
     parser.add_argument("cutlist")
     parser.add_argument("dst")
+    parser.add_argument('--pacing-profile', choices=['short_video', 'long_video', 'course'], default='short_video',
+                        help='short_video 为短视频；long_video 为长视频；course 是 long_video 的兼容别名，目标读取节奏配置')
+    parser.add_argument('--audio-wav', help='短视频和长视频模式均需要与源容器时间一致的 16kHz PCM16 WAV')
+    parser.add_argument('--semantic-review-report', help='semantic_review.py validate 通过的全稿复核报告')
     parser.add_argument(
         "--reuse-report", action="store_true",
         help="把第二个参数当作既有 autocut 报告，复用已审核的 kept_ranges 重新渲染",
     )
     parser.add_argument(
         "--plan-only", action="store_true",
-        help="只计算并写出最终 kept_ranges，不启动 4K 编码；必须同时传 --report",
+        help="只计算并写出最终 kept_ranges，不启动 视频编码；必须同时传 --report",
     )
     parser.add_argument(
         "--report",
@@ -50,8 +54,8 @@ def parse_args(argv=None):
         help="可选：已审核的关键语句前停顿计划；把其中的静音保留范围并入最终 cutlist",
     )
     parser.add_argument(
-        "--max-pause", type=float, default=1.05,
-        help="长静音剪短后保留的最大句间停顿秒数（默认：1.05）",
+        "--max-pause", type=float,
+        help="覆盖所选节奏配置的气口目标秒数",
     )
     parser.add_argument(
         "--head-pad", type=float, default=0.17,
@@ -62,6 +66,12 @@ def parse_args(argv=None):
         help="最后一处声音后保留的片尾静音秒数（默认：0.37）",
     )
     args = parser.parse_args(argv)
+    if args.pacing_profile == 'course':
+        args.pacing_profile = 'long_video'
+    profiles = json.loads((Path(__file__).parents[1] / 'references' / 'pacing-profiles.json').read_text())
+    args.pacing_settings = profiles[args.pacing_profile]
+    if args.max_pause is None:
+        args.max_pause = float(args.pacing_settings['max_pause_seconds'])
     if args.plan_only and not args.report:
         parser.error("--plan-only 必须同时传 --report")
     for name in ("max_pause", "head_pad", "tail_pad"):
@@ -138,6 +148,48 @@ def subtract_ranges_from_keep(keep, removed):
     return output
 
 
+def cap_acoustic_pauses(keep, silences, target, head_pad, tail_pad, protected=()):
+    """Trim verified silence in the assembled timeline, including retake joins.
+
+    Audio energy thresholds propose gaps; they never authorize deleting words.
+    Protection is applied to exact source windows, not entire surrounding gaps.
+    """
+    mapped, cursor = [], 0.0
+    for start, end in keep:
+        mapped.append((start, end, cursor, cursor + end - start))
+        cursor += end - start
+    projected = []
+    for a, b in silences:
+        for start, end, out_start, _ in mapped:
+            left, right = max(a, start), min(b, end)
+            if left < right:
+                projected.append((out_start + left - start, out_start + right - start))
+    # 源时间到输出时间的加减会产生 1e-14 秒误差，接缝两侧应当是同一个气口。
+    # 这里只容忍浮点误差，不跨过真实低声词。
+    gaps = []
+    for start, end in sorted(projected):
+        if gaps and start <= gaps[-1][1] + 1e-6:
+            gaps[-1] = (gaps[-1][0], max(gaps[-1][1], end))
+        else:
+            gaps.append((start, end))
+    source_cuts = []
+    for left, right in gaps:
+        if left <= .001:
+            a, b = left, max(left, right - head_pad)
+        elif right >= cursor - .001:
+            a, b = min(right, left + tail_pad), right
+        elif right - left > target:
+            a, b = left + target / 2, right - target / 2
+        else:
+            continue
+        for start, end, out_start, out_end in mapped:
+            u, v = max(a, out_start), min(b, out_end)
+            if u < v:
+                source_cuts.extend(subtract_intervals(
+                    (start + u - out_start, start + v - out_start), protected))
+    return subtract_ranges_from_keep(keep, merge_intervals(source_cuts))
+
+
 def merge_intervals(intervals):
     merged = []
     for start, end in sorted(intervals):
@@ -155,7 +207,7 @@ def load_emphasis_pause_plan(path):
         return None
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     if payload.get("audit_pass") is not True:
-        raise SystemExit("关键语句前停顿计划未完成审核，禁止启动 4K 导出")
+        raise SystemExit("关键语句前停顿计划未完成审核，禁止启动 视频导出")
     for item in payload.get("items", []):
         if not item.get("sentence") or not item.get("reason"):
             raise SystemExit("关键语句停顿计划缺少 sentence 或 reason")
@@ -240,14 +292,19 @@ def quantize_keep_ranges(keep, fps):
     return ranges
 
 
-def build_paired_concat_filter(ranges):
+def build_paired_concat_filter(ranges, input_fps=None):
     """为所有片段构造单次解码、逐段音画成对拼接的 filter graph。"""
     count = len(ranges)
     video_inputs = "".join(f"[v{index}]" for index in range(count))
     audio_inputs = "".join(f"[a{index}]" for index in range(count))
+    # VFR 必须先按 PTS 采样到统一网格，否则按解码帧序号裁切会累积漂移。
+    video_timing = "setpts=PTS-STARTPTS,"
+    if input_fps is not None:
+        video_timing += f"fps={input_fps},"
     filters = [
-        f"[0:v:0]setpts=PTS-STARTPTS,split={count}{video_inputs}",
-        f"[0:a:0]asetpts=PTS-STARTPTS,asplit={count}{audio_inputs}",
+        f"[0:v:0]{video_timing}split={count}{video_inputs}",
+        # 保留输入音轨非零起点；先补静音，再与视频共用相同源时间边界。
+        f"[0:a:0]aresample=async=1:first_pts=0,asplit={count}{audio_inputs}",
     ]
     concat_inputs = []
     for index, item in enumerate(ranges):
@@ -314,6 +371,10 @@ def write_cutlist_report(path, src, dst, duration, args, ranges, preflight,
             sum(item["output_end"] - item["output_start"] for item in ranges), 6
         ),
         "render_strategy": "paired_segment_concat_v1",
+        "pacing_profile": getattr(args, 'pacing_profile', 'long_video'),
+        "render_frame_rate": getattr(args, 'render_frame_rate', None),
+        "pacing_reference": getattr(args, 'pacing_settings', {}).get('reference'),
+        "semantic_review_pass": getattr(args, 'semantic_review_pass', None),
         "padding_seconds": {
             "max_pause": args.max_pause,
             "head_pad": args.head_pad,
@@ -363,15 +424,29 @@ def main(argv=None):
     if args.preflight_report:
         preflight = json.loads(Path(args.preflight_report).read_text(encoding="utf-8"))
         if preflight.get("preflight_pass") is not True:
-            raise SystemExit("预检报告未 N/N 通过，禁止启动 4K 导出")
+            raise SystemExit("预检报告未 N/N 通过，禁止启动 视频导出")
 
     pause_audit = None
     if args.pause_audit_report:
         pause_audit = json.loads(Path(args.pause_audit_report).read_text(encoding="utf-8"))
         if pause_audit.get("audit_pass") is not True:
-            raise SystemExit("操作型停顿审计未完成，禁止启动 4K 导出")
+            raise SystemExit("操作型停顿审计未完成，禁止启动 视频导出")
 
     emphasis_plan = load_emphasis_pause_plan(args.emphasis_pause_plan)
+    if not args.semantic_review_report:
+        raise SystemExit('缺少全稿语义复核报告；少数切点通过不能替代全文复核')
+    semantic_report = json.loads(Path(args.semantic_review_report).read_text())
+    if semantic_report.get('text_selection_required') is not True:
+        raise SystemExit('缺少全文子 Agent 文字选择记录；请按当前流程重新完成语义复核')
+    from semantic_review import validate as validate_semantic_review
+    candidate_ids = {row['id'] for row in (preflight or {}).get('resolved_ranges', [])}
+    if semantic_report.get('semantic_review_pass') is not True or validate_semantic_review(
+            semantic_report, semantic_report.get('decisions', {}), candidate_ids):
+        raise SystemExit('全稿语义复核未通过，禁止导出')
+    args.semantic_review_pass = True
+    if (emphasis_plan
+            and emphasis_plan.get('items') and emphasis_plan.get('user_requested') is not True):
+        raise SystemExit('两种模式均不自动增加强调停顿；须由用户明确要求并记录 user_requested')
 
     probe_data = json.loads(subprocess.check_output([
         "ffprobe", "-v", "error", "-select_streams", "v:0",
@@ -382,6 +457,7 @@ def main(argv=None):
     duration = float(probe_data["format"]["duration"])
     num, den = map(int, probe["r_frame_rate"].split("/"))
     fps = num / den
+    args.render_frame_rate = probe['r_frame_rate']
 
     cutlist_payload = json.loads(Path(cutlist_path).read_text(encoding="utf-8"))
     if pause_audit:
@@ -400,9 +476,14 @@ def main(argv=None):
         ]
     if not raw_keep:
         raise SystemExit("没有可保留的片段")
-    keep = raw_keep if args.reuse_report else add_benchmark_padding(
-        raw_keep, duration, args.max_pause, args.head_pad, args.tail_pad,
-    )
+    if args.pacing_profile in ('short_video', 'long_video') and not args.reuse_report:
+        # 4% 音量阈值可能漏掉低声词。两种模式都保留完整原音，只删已验证静音与重说。
+        keep = [(0.0, duration)]
+    else:
+        keep = raw_keep if args.reuse_report else add_benchmark_padding(
+            raw_keep, duration, args.max_pause, args.head_pad, args.tail_pad,
+        )
+    repeat_cuts = []
     if preflight:
         repeat_cuts = [
             (float(item["discard_start"]), float(item["discard_end"]))
@@ -411,6 +492,23 @@ def main(argv=None):
         keep = subtract_ranges_from_keep(keep, repeat_cuts)
     if emphasis_plan:
         keep = merge_intervals(keep + emphasis_ranges(emphasis_plan))
+    # 强调补白也不能带回已删口播。
+    keep = subtract_ranges_from_keep(keep, repeat_cuts)
+    if args.pacing_profile in ('short_video', 'long_video'):
+        if not args.audio_wav:
+            raise SystemExit('短视频和长视频模式均需要 --audio-wav（对齐源容器时间）')
+        from pause_profile import detect
+        audio_duration, silences = detect(args.audio_wav)
+        if abs(audio_duration - duration) > .1:
+            raise SystemExit('audio-wav 与源视频时长不同，先修正音轨时间轴')
+        protected = []
+        for item in (pause_audit or {}).get('protected_ranges', []):
+            protected.extend((float(row['start']), float(row['end'])) for row in
+                             item.get('retained_ranges_seconds', [item]))
+        if emphasis_plan:
+            protected.extend(emphasis_ranges(emphasis_plan))
+        keep = cap_acoustic_pauses(keep, silences, args.max_pause,
+                                   args.head_pad, args.tail_pad, protected)
     requested_duration = sum(end - start for start, end in keep)
     ranges = quantize_keep_ranges(keep, fps)
     expected_duration = sum(
@@ -424,7 +522,7 @@ def main(argv=None):
         )
         print(f"计划完成：{len(keep)} 段，预计成片 {expected_duration:.3f} 秒 → {args.report}")
         return 0
-    filter_graph = build_paired_concat_filter(ranges)
+    filter_graph = build_paired_concat_filter(ranges, probe["r_frame_rate"])
     ten_bit = "10le" in probe.get("pix_fmt", "")
     encoders = subprocess.check_output(["ffmpeg", "-v", "error", "-encoders"], text=True)
     if "hevc_videotoolbox" in encoders:
@@ -438,9 +536,11 @@ def main(argv=None):
         "-map", "[vout]", "-map", "[aout]",
         *codec, "-tag:v", "hvc1",
         "-pix_fmt", "p010le" if ten_bit else "yuv420p",
-        "-colorspace", probe.get("color_space", "bt709"),
-        "-color_primaries", probe.get("color_primaries", "bt709"),
-        "-color_trc", probe.get("color_transfer", "bt709"),
+        *[value for key, flag in (("color_space", "-colorspace"),
+                                  ("color_primaries", "-color_primaries"),
+                                  ("color_transfer", "-color_trc"))
+          if probe.get(key) not in (None, "unknown", "unspecified")
+          for value in (flag, probe[key])],
         "-c:a", "aac", "-b:a", "192k", dst,
     ]
     cmd[-1:-1] = mux_duration_args(expected_duration)
@@ -451,7 +551,7 @@ def main(argv=None):
             seconds = parse_progress_seconds(key, value)
             percent = progress_percent(seconds, expected_duration)
             if percent is not None and percent >= last_percent + 2:
-                print(f"4K 导出进度：{percent}%", file=sys.stderr, flush=True)
+                print(f"视频导出进度：{percent}%", file=sys.stderr, flush=True)
                 last_percent = percent
         stderr = process.stderr.read()
         return_code = process.wait()
@@ -459,7 +559,7 @@ def main(argv=None):
         if stderr:
             print(stderr, file=sys.stderr)
         raise SystemExit(return_code)
-    print("4K 导出进度：100%", file=sys.stderr, flush=True)
+    print("视频导出进度：100%", file=sys.stderr, flush=True)
 
     removed = max(0.0, duration - expected_duration)
     if args.report:

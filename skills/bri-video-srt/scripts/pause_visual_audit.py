@@ -10,6 +10,7 @@ prepare 从 auto-editor 原始 cutlist 中列出长静音，附上前后 SRT 语
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -26,6 +27,11 @@ PROTECTED_CLASSES = {
 REVIEW_CLASSES = {"retake_context", "uncertain"}
 COMPRESS_CLASSES = {"ordinary_speech_pause"} | REVIEW_CLASSES
 ALLOWED_CLASSES = PROTECTED_CLASSES | COMPRESS_CLASSES
+PAGE_SWITCH_MAX_SECONDS = 1.0
+MINIMUM_AUDIT_SECONDS = 0.8
+ASR_OVERLAP_RESOLUTIONS = {
+    "timestamp_spill", "retake", "verified_quiet_speech", "visual_operation",
+}
 OPERATION_RE = re.compile(
     r"打开|点击|点开|粘贴|输入|发送|提交|等待|回答|返回|切换|跳转|滚动|"
     r"下载|上传|验证码|生成|加载|刷新|来看|看一看|复制|选择|新建"
@@ -33,6 +39,11 @@ OPERATION_RE = re.compile(
 TIME_RE = re.compile(
     r"(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*"
     r"(\d{2}):(\d{2}):(\d{2})[,.](\d{3})"
+)
+EVIDENCE_FIELDS = (
+    "id", "start", "end", "duration", "before_text", "inside_text", "after_text",
+    "contains_asr_midpoint", "confirmed_silence_ratio", "possible_quiet_speech",
+    "semantic_operation_signal", "sample_labels", "sample_times",
 )
 
 
@@ -114,7 +125,7 @@ def build_candidates(payload, fps, cues, minimum_duration, silences=None):
                   if start <= (cue_start + cue_end) / 2 <= end]
         silence_ratio = interval_coverage(start, end, silences)
         context = " ".join(before + inside + after)
-        candidates.append({
+        candidate = {
             "id": f"pause_{len(candidates) + 1:03d}",
             "start": round(start, 6),
             "end": round(end, 6),
@@ -138,8 +149,34 @@ def build_candidates(payload, fps, cues, minimum_duration, silences=None):
             ],
             "classification": None,
             "reason": "",
-        })
+        }
+        candidate["evidence_digest"] = evidence_digest(candidate)
+        candidates.append(candidate)
     return candidates
+
+
+def evidence_digest(item):
+    """锁定 prepare 产生的检测事实，防止人工改字段绕过门禁。"""
+    payload = {key: item.get(key) for key in EVIDENCE_FIELDS}
+    encoded = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def validate_evidence_integrity(candidates):
+    errors = []
+    for item in candidates:
+        stored = item.get("evidence_digest")
+        if not stored:
+            errors.append(f"{item.get('id')}: 缺少检测证据摘要，请重新运行 prepare")
+        elif stored != evidence_digest(item):
+            errors.append(
+                f"{item.get('id')}: 检测字段被改写，请重新运行 prepare；"
+                "不得手工修改 possible_quiet_speech/静音覆盖率/ASR 命中"
+            )
+    if errors:
+        raise SystemExit("\n".join(errors))
 
 
 def select_expression(times, fps):
@@ -195,16 +232,26 @@ def take_frame_budget(ranges, budget, reverse=False):
     return list(reversed(selected)) if reverse else selected
 
 
+def has_verified_quiet_speech(item):
+    return bool(
+        item.get("classification") == "quiet_speech"
+        and str(item.get("audible_speech_evidence", "")).strip()
+        and item.get("verified_audio_ranges_seconds")
+    )
+
+
 def protected_retention_frames(item, fps, max_protected_pause):
     """返回受保护候选需要恢复的最小帧段。"""
     candidate_start = round(float(item["start"]) * fps)
     candidate_end = round(float(item["end"]) * fps)
-    explicit = item.get("protected_ranges_seconds") or []
+    explicit = item.get("protected_ranges_seconds") or (
+        item.get("verified_audio_ranges_seconds") if has_verified_quiet_speech(item) else []
+    )
     ranges = merge_ranges([
         (round(float(value["start"]) * fps), round(float(value["end"]) * fps))
         for value in explicit
     ]) if explicit else [(candidate_start, candidate_end)]
-    if item.get("possible_quiet_speech") or max_protected_pause is None:
+    if item.get("possible_quiet_speech") or has_verified_quiet_speech(item) or max_protected_pause is None:
         return ranges
     cap_frames = max(0, round(float(max_protected_pause) * fps))
     total_frames = sum(end - start for start, end in ranges)
@@ -265,6 +312,55 @@ def validate_classifications(candidates):
             errors.append(
                 f"{item.get('id')}: 候选内部可能存在低声口播，不能按普通静音压缩"
             )
+        silence_ratio = float(item.get("confirmed_silence_ratio", 0) or 0)
+        if item.get("possible_quiet_speech") and silence_ratio >= 0.9:
+            errors.append(
+                f"{item.get('id')}: 静音覆盖率 {silence_ratio:.1%} 与 possible_quiet_speech 冲突；"
+                "ASR 宽时间戳不能作为低声口播证据"
+            )
+        if classification == "quiet_speech" and not item.get("possible_quiet_speech"):
+            evidence = str(item.get("audible_speech_evidence", "")).strip()
+            ranges = item.get("verified_audio_ranges_seconds")
+            if not evidence or not isinstance(ranges, list) or not ranges:
+                errors.append(
+                    f"{item.get('id')}: quiet_speech 必须填写局部听审得到的 "
+                    "audible_speech_evidence 和 verified_audio_ranges_seconds"
+                )
+            else:
+                for index, value in enumerate(ranges, start=1):
+                    try:
+                        start, end = float(value["start"]), float(value["end"])
+                    except (KeyError, TypeError, ValueError):
+                        errors.append(f"{item.get('id')}: 听审范围 {index} 格式无效")
+                        continue
+                    if start < float(item["start"]) or end > float(item["end"]) or end <= start:
+                        errors.append(
+                            f"{item.get('id')}: 听审范围 {index} 必须位于候选内且 end > start"
+                        )
+        if classification == "retake_context":
+            if not str(item.get("repeat_candidate_id", "")).strip():
+                errors.append(f"{item.get('id')}: retake_context 必须绑定 repeat_candidate_id")
+            if not str(item.get("retake_evidence", "")).strip():
+                errors.append(f"{item.get('id')}: retake_context 必须填写 retake_evidence")
+        if item.get("contains_asr_midpoint") and silence_ratio >= 0.9:
+            resolution = item.get("asr_overlap_resolution")
+            if resolution not in ASR_OVERLAP_RESOLUTIONS:
+                errors.append(
+                    f"{item.get('id')}: 高静音率 ASR 重叠必须填写 asr_overlap_resolution"
+                )
+            if not str(item.get("resolution_evidence", "")).strip():
+                errors.append(f"{item.get('id')}: 高静音率 ASR 重叠必须填写 resolution_evidence")
+            expected = {
+                "timestamp_spill": {"ordinary_speech_pause"},
+                "retake": {"retake_context"},
+                "verified_quiet_speech": {"quiet_speech"},
+                "visual_operation": PROTECTED_CLASSES - {"quiet_speech"},
+            }.get(resolution, set())
+            if expected and classification not in expected:
+                errors.append(
+                    f"{item.get('id')}: asr_overlap_resolution={resolution} "
+                    f"与 classification={classification} 不一致"
+                )
         if (classification in PROTECTED_CLASSES - {"quiet_speech"}
                 and not item.get("possible_quiet_speech")):
             if not str(item.get("visual_evidence", "")).strip():
@@ -281,6 +377,17 @@ def validate_classifications(candidates):
                     continue
                 if start < float(item["start"]) or end > float(item["end"]) or end <= start:
                     errors.append(f"{item.get('id')}: 保护窗口 {index} 必须位于候选内且 end > start")
+            if classification == "page_switch":
+                total = sum(
+                    float(value["end"]) - float(value["start"])
+                    for value in ranges
+                    if isinstance(value, dict) and "start" in value and "end" in value
+                )
+                if total > PAGE_SWITCH_MAX_SECONDS + 1e-6:
+                    errors.append(
+                        f"{item.get('id')}: page_switch 保护 {total:.3f}s 超过 "
+                        f"{PAGE_SWITCH_MAX_SECONDS:.1f}s 最小窗口上限"
+                    )
     if errors:
         raise SystemExit("\n".join(errors))
 
@@ -297,6 +404,14 @@ def merge_decisions(candidates, decisions):
             item["reason"] = decision.get("reason", "")
             item["visual_evidence"] = decision.get("visual_evidence", "")
             item["protected_ranges_seconds"] = decision.get("protected_ranges_seconds", [])
+            item["audible_speech_evidence"] = decision.get("audible_speech_evidence", "")
+            item["verified_audio_ranges_seconds"] = decision.get(
+                "verified_audio_ranges_seconds", []
+            )
+            item["repeat_candidate_id"] = decision.get("repeat_candidate_id", "")
+            item["retake_evidence"] = decision.get("retake_evidence", "")
+            item["asr_overlap_resolution"] = decision.get("asr_overlap_resolution")
+            item["resolution_evidence"] = decision.get("resolution_evidence", "")
     return candidates
 
 
@@ -317,7 +432,7 @@ def prepare(args):
             "protected": sorted(PROTECTED_CLASSES),
             "compressed": sorted(COMPRESS_CLASSES),
             "rule": (
-                "普通口播停顿压到 1.05 秒；操作型候选必须记录正向画面证据和最小保护窗口，"
+                "普通口播停顿按所选短视频或长视频配置压缩；操作型候选必须记录正向画面证据和最小保护窗口，"
                 "窗口总计最多保留 7 秒；uncertain/retake_context 默认压缩；"
                 "可能存在低声口播时完整保留。"
             ),
@@ -336,6 +451,7 @@ def apply(args):
     payload = json.loads(args.auto_json.read_text(encoding="utf-8"))
     report = json.loads(args.report.read_text(encoding="utf-8"))
     candidates = report.get("candidates", [])
+    validate_evidence_integrity(candidates)
     if args.decisions:
         decisions = json.loads(args.decisions.read_text(encoding="utf-8"))
         candidates = merge_decisions(candidates, decisions)
@@ -359,6 +475,7 @@ def apply(args):
         item["capped_to_seconds"] = (
             args.max_protected_pause
             if (not item.get("possible_quiet_speech")
+                and not has_verified_quiet_speech(item)
                 and sum(end - start for start, end in uncapped_retention)
                 > round(args.max_protected_pause * fps))
             else None
@@ -395,7 +512,7 @@ def main(argv=None):
     prepare_parser.add_argument("--srt", type=Path, required=True)
     prepare_parser.add_argument("--report", type=Path, required=True)
     prepare_parser.add_argument("--sheet-dir", type=Path, required=True)
-    prepare_parser.add_argument("--minimum-duration", type=float, default=1.5)
+    prepare_parser.add_argument("--minimum-duration", type=float, default=MINIMUM_AUDIT_SECONDS)
     prepare_parser.set_defaults(func=prepare)
     apply_parser = commands.add_parser("apply")
     apply_parser.add_argument("--auto-json", type=Path, required=True)

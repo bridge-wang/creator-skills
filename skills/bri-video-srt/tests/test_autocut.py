@@ -122,6 +122,13 @@ class AutocutTests(unittest.TestCase):
         self.assertEqual(ranges[0]["end_frame"], 61)
         self.assertAlmostEqual(ranges[1]["output_start"], 1.0)
 
+    def test_vfr_is_resampled_by_pts_before_frame_index_trim(self):
+        ranges = MODULE.quantize_keep_ranges([(100.0, 101.0)], 30)
+        graph = MODULE.build_paired_concat_filter(ranges, "30000/1001")
+        self.assertIn("setpts=PTS-STARTPTS,fps=30000/1001,split=1", graph)
+        self.assertIn("aresample=async=1:first_pts=0,asplit=1", graph)
+        self.assertNotIn("[0:a:0]asetpts=PTS-STARTPTS", graph)
+
     def test_filter_graph_pairs_trimmed_video_and_audio_before_concat(self):
         ranges = MODULE.quantize_keep_ranges([(0.011, 1.011), (2.019, 3.019)], 60)
         graph = MODULE.build_paired_concat_filter(ranges)

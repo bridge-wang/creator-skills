@@ -13,6 +13,33 @@
       "id": "pause_002",
       "classification": "ordinary_speech_pause",
       "reason": "课件和光标均静止，前后是同一段正常口播，没有操作或重说证据"
+    },
+    {
+      "id": "pause_003",
+      "classification": "quiet_speech",
+      "reason": "静音覆盖率较高，但局部听审确认末端存在低声句首，只保护实际可听范围",
+      "asr_overlap_resolution": "verified_quiet_speech",
+      "resolution_evidence": "局部音频可听到明确低声句首，时间范围已人工收窄",
+      "audible_speech_evidence": "31.82–32.46 秒可听到‘所以说第一个’",
+      "verified_audio_ranges_seconds": [
+        {"start": 31.82, "end": 32.46}
+      ]
+    },
+    {
+      "id": "pause_004",
+      "classification": "ordinary_speech_pause",
+      "reason": "画面静止，局部音频确认长静音内没有低声口播，ASR 只是把后一句时间戳向前铺宽",
+      "asr_overlap_resolution": "timestamp_spill",
+      "resolution_evidence": "33.00–36.20 秒逐段听审无可听词句，36.21 秒才开始下一句"
+    },
+    {
+      "id": "pause_005",
+      "classification": "retake_context",
+      "reason": "停顿前是废弃半句，停顿后从完整句首重说",
+      "asr_overlap_resolution": "retake",
+      "resolution_evidence": "局部音频确认前后为相近句式重启，不是低声连续口播",
+      "repeat_candidate_id": "example_restart_001",
+      "retake_evidence": "废弃句首‘在错误的’，保留句首‘在脆弱的’，语义上是纠错后重启"
     }
   ]
 }

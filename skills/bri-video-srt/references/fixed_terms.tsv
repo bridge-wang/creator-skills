@@ -59,6 +59,7 @@ SRT	srt	always		字幕文件格式缩写，恒大写
 Python	python	always		编程语言固定写法
 Whisper	whisper	always		语音识别模型固定写法
 Markdown	markdown	always		文档格式固定写法
+HTML	html|Html	always		网页标记语言缩写固定写法
 YouTube Download	YouTube download|youtube download	always		课程中提到的第三方库固定写法
 自我纠错能力	自我纠缩能力|自我纠纵能力|自我纠送能力	always		课程口播中 Agent 核心能力的常见误识别
 一次性	一丝性	always		常见同音误识别
@@ -86,3 +87,37 @@ APP	app|App	always		应用程序缩写固定写法
 Apps	apps	always		Codex 功能名称固定写法
 道与术	道与数	contextual	方法|技巧|工具|课程|前面几节课	课程框架中“道与术”的同音误识别
 讲的是术	讲的是数	contextual	方法|技巧|工具|课程|前面几节课	课程框架中“术”的同音误识别
+写代码	起代码	contextual	编程|代码|软件|系统|计算机	编程语境中的同音误识别
+下在	下载	contextual	功夫|精力|重点	“把功夫下在……”语境中的同音误识别
+AI	AN	contextual	模型|工具|任务|回答|Agent|智能体|提问	课程口播中字母误识别
+AI	AA	contextual	模型|工具|任务|回答|Agent|智能体|用户|指挥者	课程口播中字母误识别
+反馈给	反复给	contextual	AI|回答|结果|满意	“让 AI 反馈给我们……”语境中的同音误识别
+炸裂的新闻	炸裂体新闻|炸列体新闻|扎列体新闻	contextual	AI|模型|新闻|更新	课程示例中的连读误识别
+黑紫配色	黑子配色	contextual	网页|AI 味|配色|结果	AI 网页设计语境中的同音误识别
+开启独属于	开启读出于|开启读属于	contextual	自己|AI 之旅|旅程	课程结尾行动号召中的连读误识别
+整门课程	准门课程	always		课程口播中“整门课程”的常见误识别
+历史性的一刻	历史性的一课	always		时间语境中“一刻”的同音误识别
+做吐了	做兔了	contextual	PPT|每天|都快	反复制作 PPT 的口语表达
+分享欲	分享运	contextual	分享|PPT|自媒体|降低	分享欲的同音误识别
+账还是算不平	仗还是算不平	always		成本语境的同音误识别
+非常便宜不说	非常前一步说|非常便宜步说	contextual	AI|代码|强项|编程	便宜不说的连读误识别
+PPT 即代码	PPT集代码|PPT及代码	always		PPT 即代码的同音误识别
+强调句	强调距	contextual	PPT|比例|强调	字幕中的同音误识别
+大大地降低	大大的降低	always		副词修饰动词时“地”的同音错字
+快速地理解	快速的理解	always		副词修饰动词时“地”的同音错字
+Sol	SO|Soul	contextual	模型|参数|5\.6|6|Astra	白板口播中 Sol 的字母及同音误识别
+Terra	TERA|TERRA|tero	contextual	模型|参数|5\.6|Sol|SO	白板口播中 Terra 的拼写误识别
+平庸	停拥|平拥	always		口播中平庸的同音误识别
+喂给	为给	contextual	模型|数据|训练	喂给模型训练数据语境的同音误识别
+再升级配置	在升级配置	contextual	发现问题|升级|模型|强度	先发现问题再升级配置语境
+后训练	后性	contextual	模型|训练|阶段	模型训练语境的连读误识别
+难在怎么组合	难再怎么组合	always		任务推理语境的同音错字
+不在组合推理上	不再组合推理上	always		任务瓶颈语境的同音错字
+AI	AH	contextual	月考|成绩|预测|预算	AI 预测任务语境的字母误识别
+Sol	re:(?<=\d)soul|re:(?<=\d)so\b	contextual	模型|参数|对比|举例|5\.6	数字版本号紧连模型名时的识别别名
+Terra	re:(?<=\d)tero|re:(?<=\d)tera\b	contextual	模型|参数|举例|5\.6	数字版本号紧连模型名时的识别别名
+预测	预算	contextual	月考成绩	本次局部原音重转写确认为预测月考成绩
+回答得很好	回答的很好	always		口播字幕得字规范
+主动地创建	主动的创建	always		口播字幕地字规范
+打得长	打的长	contextual	草稿|一个人|五个人	草稿长度语境得字规范
+想得越多	想的越多	always		口播字幕得字规范

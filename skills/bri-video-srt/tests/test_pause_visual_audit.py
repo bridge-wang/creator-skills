@@ -11,6 +11,9 @@ SPEC.loader.exec_module(MODULE)
 
 
 class PauseVisualAuditTests(unittest.TestCase):
+    def test_default_audit_threshold_includes_short_correction_pauses(self):
+        self.assertEqual(MODULE.MINIMUM_AUDIT_SECONDS, 0.8)
+
     def test_candidates_include_semantic_operation_signal(self):
         payload = {"chunks": [[0, 60, 1.0], [60, 180, 99999.0], [180, 240, 1.0]]}
         cues = [(1.5, 2.5, "我们把链接粘贴过来"), (3, 4, "等待模型回答")]
@@ -134,6 +137,82 @@ class PauseVisualAuditTests(unittest.TestCase):
         result = MODULE.build_candidates(payload, 60, cues, 1.5, silences=[(1, 3)])
         self.assertEqual(result[0]["confirmed_silence_ratio"], 1.0)
         self.assertFalse(result[0]["possible_quiet_speech"])
+
+    def test_detector_evidence_digest_rejects_manual_quiet_speech_override(self):
+        payload = {"chunks": [[0, 60, 1.0], [60, 180, 99999.0], [180, 240, 1.0]]}
+        cues = [(1.5, 2.5, "Whisper 的宽时间戳")]
+        candidate = MODULE.build_candidates(
+            payload, 60, cues, 1.5, silences=[(1, 3)],
+        )[0]
+        candidate["possible_quiet_speech"] = True
+        with self.assertRaises(SystemExit):
+            MODULE.validate_evidence_integrity([candidate])
+
+    def test_high_silence_ratio_cannot_be_forced_to_possible_quiet_speech(self):
+        with self.assertRaises(SystemExit):
+            MODULE.validate_classifications([{
+                "id": "pause_001", "start": 1, "end": 15,
+                "classification": "quiet_speech", "reason": "ASR 命中",
+                "possible_quiet_speech": True, "confirmed_silence_ratio": 0.99,
+            }])
+
+    def test_manual_quiet_speech_requires_audible_words_and_exact_range(self):
+        candidate = {
+            "id": "pause_001", "start": 1, "end": 15,
+            "classification": "quiet_speech", "reason": "局部听审确认",
+            "possible_quiet_speech": False, "confirmed_silence_ratio": 0.99,
+        }
+        with self.assertRaises(SystemExit):
+            MODULE.validate_classifications([candidate])
+        candidate.update({
+            "audible_speech_evidence": "12.8 秒可听到‘首先选 AI 工具’",
+            "verified_audio_ranges_seconds": [{"start": 12.8, "end": 14.5}],
+        })
+        MODULE.validate_classifications([candidate])
+
+    def test_verified_quiet_speech_restores_only_the_heard_range(self):
+        candidate = {
+            "start": 1, "end": 15, "duration": 14,
+            "classification": "quiet_speech", "possible_quiet_speech": False,
+            "audible_speech_evidence": "12.8 秒可听到完整句首",
+            "verified_audio_ranges_seconds": [{"start": 12.8, "end": 14.5}],
+        }
+        self.assertEqual(
+            MODULE.protected_retention_frames(candidate, 10, 7.0), [(128, 145)]
+        )
+
+    def test_page_switch_cannot_protect_more_than_one_second(self):
+        with self.assertRaises(SystemExit):
+            MODULE.validate_classifications([{
+                "id": "pause_001", "start": 1, "end": 6,
+                "classification": "page_switch", "reason": "发生翻页",
+                "possible_quiet_speech": False,
+                "visual_evidence": "2.0 秒旧页，3.5 秒新页",
+                "protected_ranges_seconds": [{"start": 2, "end": 3.5}],
+            }])
+
+    def test_retake_context_requires_actual_candidate_link(self):
+        with self.assertRaises(SystemExit):
+            MODULE.validate_classifications([{
+                "id": "pause_001", "start": 1, "end": 3,
+                "classification": "retake_context", "reason": "说错后重说",
+                "possible_quiet_speech": False,
+            }])
+
+    def test_high_silence_asr_overlap_requires_explicit_resolution(self):
+        candidate = {
+            "id": "pause_001", "start": 1, "end": 3,
+            "classification": "ordinary_speech_pause", "reason": "宽时间戳",
+            "possible_quiet_speech": False, "contains_asr_midpoint": True,
+            "confirmed_silence_ratio": 0.99,
+        }
+        with self.assertRaises(SystemExit):
+            MODULE.validate_classifications([candidate])
+        candidate.update({
+            "asr_overlap_resolution": "timestamp_spill",
+            "resolution_evidence": "局部逐词转写确认声音只在静音结束后出现",
+        })
+        MODULE.validate_classifications([candidate])
 
 
 if __name__ == "__main__":

@@ -17,6 +17,11 @@ from pathlib import Path
 
 
 SILENCE_MERGE_GAP_SECONDS = 0.06
+LONG_SILENCE_TOLERANCE_SECONDS = 0.08
+VISUAL_SILENCE_CLASSES = {
+    "operation", "wait_generation", "page_switch", "typing_or_input",
+}
+PAGE_SWITCH_MAX_SECONDS = 1.0
 
 
 def merge_silences(events, max_gap=SILENCE_MERGE_GAP_SECONDS):
@@ -33,7 +38,7 @@ def merge_silences(events, max_gap=SILENCE_MERGE_GAP_SECONDS):
 def detect_silences(media):
     run = subprocess.run(
         ["ffmpeg", "-nostdin", "-hide_banner", "-i", str(media),
-         "-af", "silencedetect=noise=-35dB:d=0.18", "-f", "null", "-"],
+         "-vn", "-af", "silencedetect=noise=-35dB:d=0.18", "-f", "null", "-"],
         text=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True,
     )
     events, current = [], None
@@ -46,6 +51,136 @@ def detect_silences(media):
             events.append([current, float(end.group(1))])
             current = None
     return merge_silences(events)
+
+
+def merge_time_ranges(ranges):
+    merged = []
+    for start, end in sorted(ranges):
+        if end <= start:
+            continue
+        if merged and start <= merged[-1][1] + 1e-6:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    return merged
+
+
+def source_ranges_to_output(source_ranges, kept_ranges):
+    """把源片保护窗口投影到最终 kept-ranges 音频预览时间轴。"""
+    output = []
+    for source_start, source_end in source_ranges:
+        for kept in kept_ranges:
+            kept_start, kept_end = float(kept["start"]), float(kept["end"])
+            left, right = max(source_start, kept_start), min(source_end, kept_end)
+            if right <= left:
+                continue
+            output_start = float(kept.get("output_start", 0.0))
+            output.append([
+                output_start + left - kept_start,
+                output_start + right - kept_start,
+            ])
+    return merge_time_ranges(output)
+
+
+def allowed_long_silence_ranges(cutlist):
+    """只接受有证据的操作、强调停顿或局部听审确认的低声口播。"""
+    source_ranges = []
+    for item in cutlist.get("protected_operation_ranges_seconds", []):
+        classification = item.get("classification")
+        if (classification in VISUAL_SILENCE_CLASSES
+                and str(item.get("visual_evidence", "")).strip()):
+            item_ranges = [
+                (float(value["start"]), float(value["end"]))
+                for value in item.get("protected_ranges_seconds", [])
+            ]
+            if (classification == "page_switch"
+                    and sum(end - start for start, end in item_ranges)
+                    > PAGE_SWITCH_MAX_SECONDS + 1e-6):
+                raise SystemExit(
+                    f"{item.get('id', 'page_switch')}: page_switch 保护窗口超过 "
+                    f"{PAGE_SWITCH_MAX_SECONDS:.1f}s，不能豁免长静音"
+                )
+            source_ranges.extend(item_ranges)
+        elif (classification == "quiet_speech"
+              and str(item.get("audible_speech_evidence", "")).strip()):
+            source_ranges.extend(
+                (float(value["start"]), float(value["end"]))
+                for value in item.get("verified_audio_ranges_seconds", [])
+            )
+    for item in cutlist.get("emphasis_pause_ranges_seconds", []):
+        source_ranges.extend(
+            (float(value["start"]), float(value["end"]))
+            for value in item.get("retained_ranges_seconds", [])
+        )
+    return source_ranges_to_output(source_ranges, cutlist.get("kept_ranges_seconds", []))
+
+
+def subtract_time_ranges(interval, allowed):
+    pieces = [list(interval)]
+    for allowed_start, allowed_end in allowed:
+        next_pieces = []
+        for start, end in pieces:
+            if allowed_end <= start or allowed_start >= end:
+                next_pieces.append([start, end])
+                continue
+            if start < allowed_start:
+                next_pieces.append([start, min(end, allowed_start)])
+            if allowed_end < end:
+                next_pieces.append([max(start, allowed_end), end])
+        pieces = next_pieces
+    return pieces
+
+
+def unexplained_long_silences(silences, cutlist, max_pause,
+                              tolerance=LONG_SILENCE_TOLERANCE_SECONDS):
+    allowed = allowed_long_silence_ranges(cutlist)
+    limit = float(max_pause) + tolerance
+    issues = []
+    for start, end in silences:
+        pieces = subtract_time_ranges((start, end), allowed)
+        unexplained = pieces if sum(right-left for left,right in pieces) > limit else []
+        if unexplained:
+            issues.append({
+                "silence_start": round(start, 6),
+                "silence_end": round(end, 6),
+                "silence_duration": round(end - start, 6),
+                "unexplained_ranges": [
+                    {"start": round(left, 6), "end": round(right, 6),
+                     "duration": round(right - left, 6)}
+                    for left, right in unexplained
+                ],
+            })
+    return issues, allowed
+
+
+def validate_silence(args):
+    cutlist = json.loads(Path(args.cutlist).read_text(encoding="utf-8"))
+    max_pause = args.max_pause
+    if max_pause is None:
+        max_pause = cutlist.get('padding_seconds', {}).get('max_pause')
+    if max_pause is None:
+        raise SystemExit('缺少气口目标：传 --max-pause 或使用含 padding_seconds 的 cutlist')
+    from pause_profile import detect
+    tolerance = LONG_SILENCE_TOLERANCE_SECONDS
+    if cutlist.get('pacing_profile') in ('short_video', 'long_video'):
+        numerator, denominator = map(float, cutlist['render_frame_rate'].split('/'))
+        tolerance = denominator / numerator + .01
+    issues, allowed = unexplained_long_silences(
+        detect(args.media)[1], cutlist, max_pause, tolerance,
+    )
+    result = {
+        "pass": not issues,
+        "max_pause_seconds": max_pause,
+        "tolerance_seconds": tolerance,
+        "allowed_evidence_ranges_seconds": [
+            {"start": round(start, 6), "end": round(end, 6)}
+            for start, end in allowed
+        ],
+        "unexplained_long_silences": issues,
+    }
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if issues:
+        raise SystemExit(1)
 
 
 def resolve_ranges(candidates, intervals):
@@ -241,9 +376,24 @@ def validate_candidate_text(text, item):
     return left, right, counts, count_ok
 
 
+def validate_retake_coverage(pause_audit, candidate_config):
+    candidate_ids = {item["id"] for item in candidate_config.get("candidates", [])}
+    missing = [
+        f"{item.get('id')}->{item.get('repeat_candidate_id')}"
+        for item in pause_audit.get("candidates", [])
+        if item.get("classification") == "retake_context"
+        and item.get("repeat_candidate_id") not in candidate_ids
+    ]
+    if missing:
+        raise SystemExit("retake_context 未绑定实际重复删除候选：" + ", ".join(missing))
+
+
 def prepare(args):
     config = json.loads(Path(args.candidates).read_text(encoding="utf-8"))
     payload = json.loads(Path(args.auto_json).read_text(encoding="utf-8"))
+    if args.pause_audit_report:
+        pause_audit = json.loads(Path(args.pause_audit_report).read_text(encoding="utf-8"))
+        validate_retake_coverage(pause_audit, config)
     fps_text = subprocess.check_output([
         "ffprobe", "-v", "error", "-select_streams", "v:0",
         "-show_entries", "stream=r_frame_rate", "-of", "default=nw=1:nk=1", args.media,
@@ -272,8 +422,13 @@ def validate_preview(args):
         results.append({"id": item["id"], "left_ok": bool(left), "right_ok": bool(right),
                         "phrase_counts": counts,
                         "pass": bool(left) and bool(right) and count_ok})
-    full_text = normalized("".join(cue_text for _, _, cue_text in cues))
-    duplicates = find_tandem_repeats(full_text, report.get("allowed_tandem_repeats"))
+    # 独立样本的上下文可能重叠，不跨样本拼接边界扫描复读。
+    duplicates = []
+    for item in report['preview_mapping']:
+        text = normalized(''.join(value for start, end, value in cues
+                                  if item['preview_start'] <= (start + end) / 2 <= item['preview_end']))
+        duplicates.extend({'sample_id': item['id'], **row} for row in
+                          find_tandem_repeats(text, report.get('allowed_tandem_repeats')))
     passed = all(result["pass"] for result in results) and not duplicates
     report.update({"preflight_validation": results, "tandem_repeats": duplicates,
                    "preflight_pass": passed})
@@ -321,6 +476,7 @@ def main():
     prepare_parser = commands.add_parser("prepare")
     for name in ("media", "wav", "candidates", "auto_json", "combined_json", "preview_wav", "report"):
         prepare_parser.add_argument(f"--{name.replace('_', '-')}", dest=name, required=True)
+    prepare_parser.add_argument("--pause-audit-report")
     prepare_parser.set_defaults(func=prepare)
     preview_parser = commands.add_parser("validate")
     preview_parser.add_argument("--preview-srt", required=True)
@@ -338,6 +494,12 @@ def main():
     final_parser.add_argument("--srt", required=True)
     final_parser.add_argument("--candidates", required=True)
     final_parser.set_defaults(func=validate_final)
+    silence_parser = commands.add_parser("validate-silence")
+    silence_parser.add_argument("--media", required=True)
+    silence_parser.add_argument("--cutlist", required=True)
+    silence_parser.add_argument("--max-pause", type=float,
+                               help='默认读取 cutlist 的气口目标；缺少目标时必须显式提供')
+    silence_parser.set_defaults(func=validate_silence)
     arguments = parser.parse_args()
     arguments.func(arguments)
 
